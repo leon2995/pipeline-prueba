@@ -1,0 +1,21 @@
+{
+  "task": "audit-codex-stdin",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "CLAUDE.md:9",
+      "detail": "La fila 'CTO / planner' dice 'Opus 5.5 (`claude-opus-5-5`) con ultracode: esfuerzo `xhigh` y orquestación con workflows (`.claude/settings.json`)'. `.claude/settings.json` solo tiene \"model\": \"claude-opus-5-5\" y \"ultracode\": true; no hay effortLevel, xhigh ni nada sobre workflows. La cita '(.claude/settings.json)' implica que ese detalle es verificable ahí y no lo es.",
+      "fix": "Dejar la fila del CTO como 'Opus 5.5 (`claude-opus-5-5`) con ultracode' (lo que pide C6), o citar la documentación de Claude Code en vez de `.claude/settings.json`."
+    },
+    {
+      "severity": "baja",
+      "file": "SETUP.md:20",
+      "detail": "SETUP.md sigue diciendo '# Codex CLI (segundo auditor, usa tu ChatGPT Pro)', mientras el diff cambia 'ChatGPT Pro' por 'ChatGPT Business' en audit-codex.md y CLAUDE.md. No es parte de C1-C7.",
+      "fix": "Actualizar SETUP.md en un commit posterior o dejar constancia de que quedó pendiente."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "[2026-09-28] [audit-codex-stdin] documentación de gobierno: cuando CLAUDE.md cite un archivo de config (p. ej. settings.json) como fuente de un detalle técnico, verificar que ese detalle esté literalmente en el archivo citado; no aceptar afirmaciones adicionales no respaldadas por la evidencia."
+}

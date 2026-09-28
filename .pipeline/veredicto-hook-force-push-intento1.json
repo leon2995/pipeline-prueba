@@ -1,0 +1,21 @@
+{
+  "task": "hook-force-push",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "file": ".claude/hooks/guard-commands.sh:20-47 (función is_force_push, gsub de comillas en línea 30 y checks de fuerza en línea 41)",
+      "detail": "Bypass real de C1 mediante una comilla a mitad de token. El comando exacto `git push origin --for\"ce\" feature-x` hace un push forzado de verdad: bash concatena `--for` (sin comillas) con `\"ce\"` (comillas adyacentes, sin espacio) en una sola palabra, y la eliminación de comillas de bash entrega a git literalmente el argumento `--force`. Pero el tokenizador del hook solo pela comillas al inicio o al final del token, no las que están en medio. Para el token `--for\"ce\"` queda `--for\"ce` y ningún patrón de fuerza matchea; el hook sale 0 y el push forzado pasa.",
+      "fix": "Antes de comparar cada token contra los patrones de fuerza, quitar TODAS las comillas/backticks/`$(` del token (gsub global sin anclas). Agregar a scripts/test-hooks.sh casos bloqueados con `git push origin --for\"ce\" feature-x`, `-\"f\"` y `--forc'e'`."
+    },
+    {
+      "severity": "media",
+      "file": "scripts/test-hooks.sh",
+      "detail": "La suite no tiene ningún caso con comilla a mitad de flag ni con \\r final de comando (jq en Windows emite CRLF). Por eso pasa 65/65 sin detectar el bypass del hallazgo alta.",
+      "fix": "Agregar casos bloqueados con comillas a mitad de token y un comando que termine en \\r."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Un tokenizador de shell para hooks de seguridad debe quitar comillas/backticks en cualquier posición del token (no solo líder/cola): bash concatena `--for\"ce\"` en `--force` sin espacio, así que un flag partido por una comilla a mitad de palabra puede esconderse de un filtro que solo pela comillas al inicio/fin del token."
+}

@@ -1,0 +1,25 @@
+# Rutas de gobierno. Un PR que modifique, borre o renombre alguna de estas rutas lo mergea
+# Leonardo, también a staging: guard-commands.sh bloquea gh pr merge para ese PR.
+# Es la única fuente de la lista; CLAUDE.md la cita.
+#
+# Formato: una regla por línea; # inicia un comentario; se ignoran líneas vacías y espacios.
+# La comparación no distingue mayúsculas.
+#   **/X/  directorio en cualquier nivel: la ruta empieza por X/ o contiene /X/
+#   **/X   archivo en cualquier nivel: la ruta es X o termina en /X
+#   X/     directorio en la raíz: la ruta empieza por X/
+#   X      archivo en la raíz: la ruta es exactamente X
+# No se admiten otros comodines: una regla con * fuera del prefijo **/ bloquea todo merge.
+# Tampoco se admite una barra interna en **/X ni en **/X/ (por ejemplo **/docs/adr/): no tiene
+# traducción fiel a CODEOWNERS, que la anclaría a la raíz. El hook bloquea todo merge con esa regla.
+# .github/CODEOWNERS se deriva de este archivo y scripts/test-hooks.sh falla si no coinciden:
+#   **/X/ -> X/    **/X -> X    X/ -> /X/    X -> /X    (dueño @leon2995)
+# Diferencia: CODEOWNERS distingue mayúsculas y este archivo no.
+**/CLAUDE.md
+**/LESSONS.md
+**/.claude/
+.github/
+scripts/jev.py
+scripts/test-hooks.sh
+scripts/run-task.sh
+scripts/resume-task.sh
+scripts/watch-deploy.sh

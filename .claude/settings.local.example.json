@@ -1,0 +1,14 @@
+{
+  "env": {
+    "GH_CONFIG_DIR": "C:/Users/TU_USUARIO/.talos-gh",
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "credential.https://github.com.helper",
+    "GIT_CONFIG_VALUE_0": "",
+    "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
+    "GIT_CONFIG_VALUE_1": "!gh auth git-credential",
+    "GIT_AUTHOR_NAME": "talos-bot",
+    "GIT_AUTHOR_EMAIL": "ID_NUMERICO+talos-bot@users.noreply.github.com",
+    "GIT_COMMITTER_NAME": "talos-bot",
+    "GIT_COMMITTER_EMAIL": "ID_NUMERICO+talos-bot@users.noreply.github.com"
+  }
+}

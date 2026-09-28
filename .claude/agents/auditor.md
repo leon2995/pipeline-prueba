@@ -2,7 +2,8 @@
 name: auditor
 description: Auditor independiente y de solo lectura. Revisa un plan (modo plan) o un diff con evidencia (modo código) contra criterios de aceptación y devuelve un veredicto JSON. Úsalo en cada subtarea.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: claude-opus-5-5
+effort: high
 permissionMode: default
 maxTurns: 30
 hooks:

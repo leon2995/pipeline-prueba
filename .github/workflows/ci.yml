@@ -3,9 +3,25 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [staging, main]
+    # feat/** y fix/**: evidencia de CI antes del PASS, sin abrir el PR (un PR corre CI dos veces).
+    branches: [staging, main, 'feat/**', 'fix/**']
 
 jobs:
+  # Suite de los hooks del pipeline (C2 de cuenta-agente). Check obligatorio en staging y main.
+  hooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: awk -W version 2>/dev/null | head -1 || true
+      - run: bash scripts/test-hooks.sh
+      # En ubuntu-latest awk es gawk; esta corrida prueba el analizador con mawk (lo instala si falta).
+      - name: test-hooks con mawk
+        run: |
+          command -v mawk >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq mawk; }
+          mkdir -p /tmp/con-mawk && ln -sf "$(command -v mawk)" /tmp/con-mawk/awk
+          /tmp/con-mawk/awk -W version 2>&1 | head -1
+          PATH="/tmp/con-mawk:$PATH" bash scripts/test-hooks.sh
+
   detect:
     runs-on: ubuntu-latest
     outputs:

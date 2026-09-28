@@ -1,0 +1,21 @@
+{
+  "task": "hook-force-push",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "file": ".claude/hooks/guard-commands.sh:33 y 39-42 (split por [;&|\\n] y reset de estado por segmento)",
+      "detail": "Bypass real de C1/C2: la segmentación por ;, &, | se hace sobre el texto crudo, sin conciencia de comillas, y el estado se reinicia en cada segmento. Comando exacto: `git push origin \"a&b\" -f`. Bash ejecuta un solo comando con argv `push origin a&b -f` (push forzado real), pero el awk corta en el & entrecomillado: el primer segmento llega a estado 2 sin ver -f y el segundo arranca en estado 0, así que -f nunca se compara. El hook sale 0. Igual con `git push origin \"a&b\" -d rama` (C2) y con URLs con query string (`git push \"https://host/repo.git?a=1&b=2\" -f`).",
+      "fix": "No cortar en separadores que estén dentro de comillas (o escapados). Agregar casos bloqueados con `git push origin \"a&b\" -f`, `\"a;b\"`, `\"a|b\"` y el equivalente con -d."
+    },
+    {
+      "severity": "media",
+      "file": "scripts/test-hooks.sh",
+      "detail": "La suite (112 casos) no tiene ningún caso con un separador dentro de una palabra entrecomillada que preceda a un flag de fuerza o borrado en el mismo comando.",
+      "fix": "Agregar los casos del hallazgo alta como bloqueados."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "hooks de comandos: partir el comando por separadores de shell (;, &, |) sobre texto crudo sin contar comillas abre un bypass: un separador dentro de un argumento entrecomillado corta el análisis y reinicia el estado, dejando un flag real huérfano. Antes de partir por separadores, verificar que el separador esté fuera de comillas."
+}

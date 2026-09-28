@@ -1,0 +1,12 @@
+# Derivado de .claude/rutas-gobierno.txt (única fuente de las rutas de gobierno).
+# scripts/test-hooks.sh falla si este archivo y las reglas no coinciden. No lo edites a mano sin
+# cambiar también las reglas. Un PR que toque estas rutas necesita la aprobación de @leon2995.
+CLAUDE.md @leon2995
+LESSONS.md @leon2995
+.claude/ @leon2995
+/.github/ @leon2995
+/scripts/jev.py @leon2995
+/scripts/test-hooks.sh @leon2995
+/scripts/run-task.sh @leon2995
+/scripts/resume-task.sh @leon2995
+/scripts/watch-deploy.sh @leon2995

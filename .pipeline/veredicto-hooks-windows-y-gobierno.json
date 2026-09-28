@@ -1,0 +1,27 @@
+{
+  "task": "hooks-windows-y-gobierno",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": ".claude/settings.json",
+      "detail": "Preexistente, no viene del diff, pero no está declarado en el plan. El PreToolUse de guard-commands.sh en settings.json solo tiene matcher \"Bash\". En Windows la herramienta PowerShell puede ser el shell principal de la sesión CTO; un `gh pr merge 102 --squash` corrido desde PowerShell no ejecuta ningún hook y un PR de gobierno se mergea a staging sin C3/C4. Los subagentes no están expuestos (sus `tools:` no incluyen PowerShell).",
+      "fix": "En una subtarea aparte (toca .claude/, requiere PR de Leonardo): matcher \"Bash|PowerShell\" en settings.json y un caso en la suite; o declarar el límite en el modelo de amenaza de CLAUDE.md y en el hook."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Merges normales en varias líneas se bloquean con un motivo engañoso: `gh pr merge 101 \\<salto de línea>  --squash` da 'no pude identificar un único PR (2 argumentos sin flag)', porque la continuación de línea no se normaliza antes de xargs. Un --body de varias líneas entre comillas da '¿comillas sin cerrar?'. Siempre falla hacia el bloqueo.",
+      "fix": "Reemplazar barra invertida más salto de línea por un espacio antes de separar argumentos (como analizar_git). Documentar que los cuerpos largos van con --body-file. Agregar el caso como permitido."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "patron_merge y el conteo estricto exigen `gh` exacto precedido por `[;&|( `]`: `gh.exe pr merge 102 --squash` y `bash -c \"gh pr merge 102 --squash\"` no entran al bloque y salen con 0 sin consultar el PR. analizar_git sí contempla git.exe y bash -c.",
+      "fix": "Aceptar `gh(\\.exe)?` y `\"`, `'`, `/` delante en patron_merge y en el conteo estricto, o declararlo como límite. Agregar casos con gh.exe y bash -c."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [hooks-windows-y-gobierno] hooks en Windows: un PreToolUse con matcher \"Bash\" no cubre la herramienta PowerShell, que en Windows es el shell principal de la sesión; los controles de comandos deben usar matcher \"Bash|PowerShell\" o declarar el límite."
+}

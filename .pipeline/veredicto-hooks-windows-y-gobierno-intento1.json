@@ -1,0 +1,27 @@
+{
+  "task": "hooks-windows-y-gobierno",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Rompe C3: sin número de PR, el hook consulta `gh pr view` sin argumentos, es decir, el PR de la rama actual en el momento del hook y no el de la rama sobre la que se mergea después. Input exacto: `git switch fix/gobierno && gh pr merge --squash` (o `gh pr checkout 8 && gh pr merge --squash`) lanzado desde `feat/T1`, cuyo PR tiene base staging y no toca rutas de gobierno. `gh pr view` sin argumentos también encuentra PRs ya mergeados de la rama. El hook revisa ese PR y sale con 0, y gh mergea el PR de gobierno. CLAUDE.md Fase 4 indica `gh pr merge --squash` sin número.",
+      "fix": "Exigir un número de PR explícito (bloquear con 'indica el número: gh pr merge <n> --squash' si `target` está vacío). Actualizar CLAUDE.md Fase 4 a `gh pr merge <n> --squash`. Agregar a la suite `git switch x && gh pr merge --squash` como bloquea y convertir `g permite 'gh pr merge --squash'` en bloquea."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Bloquea sin razón merges normales que terminan en una redirección. `resto=${resto%%[;&|]*}` corta en el `&` de `2>&1` y deja `2>` como argumento; las redirecciones cuentan como posicionales. `gh pr merge 101 --squash 2>&1`, `... 2>/dev/null` y `... > merge.log` bloquean con 'no pude identificar un único PR'.",
+      "fix": "Descartar redirecciones antes de separar argumentos (normalizar `2>&1`, `&>`) y, en el bucle, los tokens que empiezan por `[0-9]*[<>]` junto con su destino. Agregar a la suite como permite `gh pr merge 101 --squash 2>&1`, `2>/dev/null` y `> log.txt`."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Falsos bloqueos menores, fail-closed: (1) flag corto con valor pegado de solo letras que contiene d (`-tdocs`, `-bdone`) se toma como borrado de rama; (2) `;`, `&` o `|` dentro de comillas en `--body`/`--subject` corta el resto y bloquea con 'comillas sin cerrar'; (3) el texto 'gh pr merge' dentro del cuerpo cuenta como segundo merge.",
+      "fix": "En grupos cortos, mirar `d` y `R` solo en las letras anteriores al primer flag con valor (A, b, F, t). En (2) y (3), mensaje que explique la causa o documentarlo como límite conocido."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [hooks-windows-y-gobierno] hooks de compuerta: un hook que resuelve el objetivo de forma implícita (PR de la rama actual, cwd) evalúa el estado del momento del hook y no el del comando encadenado (git switch x && gh pr merge); exigir identificador explícito y probar el comando con redirecciones comunes (2>&1, >log)."
+}

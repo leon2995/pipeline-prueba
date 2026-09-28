@@ -1,0 +1,439 @@
+== guard-commands.sh: push forzado (bloquea)
+ok     bloquea  git push --force origin feat/x
+ok     bloquea  git push origin feat/x --force-with-lease
+ok     bloquea  git push -f origin feat/x
+ok     bloquea  git push -uf origin feat/x
+ok     bloquea  git push origin +feat/x
+ok     bloquea  git push origin feat/x --force
+ok     bloquea  git push origin feat/x -f
+ok     bloquea  git push -fu origin feat/x
+ok     bloquea  git push --force-with-lease=feat/x origin feat/x
+ok     bloquea  git push --force-if-includes origin feat/x
+ok     bloquea  git push origin "+feat/x"
+ok     bloquea  git push origin +HEAD:feat/x
+ok     bloquea  git push --mirror origin
+ok     bloquea  git push --mirr origin
+ok     bloquea  GIT_TRACE=1 git -C . push -f origin feat/x
+ok     bloquea  git -c remote.origin.push=+refs/heads/*:refs/heads/* push origin
+ok     bloquea  git status && git push -f origin feat/x
+ok     bloquea  bash -c "git push -f origin feat/x"
+ok     bloquea  git push origin feat/x \\n  --force
+== guard-commands.sh: push forzado escondido con comillas, escapes, redirecciones o abreviaturas (bloquea)
+ok     bloquea  git push origin --for"ce" feature-x
+ok     bloquea  git push -"f" origin feat/x
+ok     bloquea  git push --forc'e' origin feat/x
+ok     bloquea  git p\ush -f origin feat/x
+ok     bloquea  "git" push -f origin feat/x
+ok     bloquea  git >/dev/null push -f origin feat/x
+ok     bloquea  git > /dev/null push -f origin feat/x
+ok     bloquea  git 2>&1 push -f origin feat/x
+ok     bloquea  git push -f origin feat/x &>/dev/null
+ok     bloquea  git push --m origin
+ok     bloquea  git push --force-w origin feat/x
+ok     bloquea  git push --forc origin feat/x
+ok     bloquea  "C:\Program Files\Git\bin\git.exe" push -f origin feat/x
+ok     bloquea  git push origin $'-f' feat/x
+ok     bloquea  GIT_CONFIG_PARAMETERS="'remote.origin.push=+refs/heads/*:refs/heads/*'" git push origin
+ok     bloquea  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git push origin
+ok     bloquea  git push -f origin feat/x + \r final
+== guard-commands.sh: borrado de ramas (bloquea)
+ok     bloquea  git branch -D rama-que-no-existe
+ok     bloquea  git branch -d rama-que-no-existe
+ok     bloquea  git branch --delete rama-que-no-existe
+ok     bloquea  git branch -rd origin/rama
+ok     bloquea  git branch -rD origin/rama
+ok     bloquea  git branch '-d' rama
+ok     bloquea  git branch "-D" rama
+ok     bloquea  git branch -\D rama
+ok     bloquea  git branch --del rama
+ok     bloquea  git -C . branch -d rama
+ok     bloquea  git >/dev/null branch -d rama
+ok     bloquea  git push origin --delete feat/x
+ok     bloquea  git push origin -d feat/x
+ok     bloquea  git push origin :feat/x
+ok     bloquea  git update-ref -d refs/heads/feat/x
+== guard-commands.sh: main y merge (bloquea)
+ok     bloquea  git push origin main
+ok     bloquea  git push origin 'main'
+ok     bloquea  git push origin HEAD:main
+ok     bloquea  git push origin HEAD:refs/heads/main
+ok     bloquea  git push -u origin main 2>&1
+ok     bloquea  gh pr merge 1 --squash --admin
+== guard-commands.sh: permitidos
+ok     permite  git status
+ok     permite  npm test
+ok     permite  git push -u origin feat/x
+ok     permite  git push --follow-tags origin feat/x
+ok     permite  git push origin feat/x
+ok     permite  git push -u origin fix/hook-force-push
+ok     permite  git push -u origin feat/x && ls -f
+ok     permite  git commit -m "docs: explica por qué push --force está prohibido"
+ok     permite  git stash push -m wip
+ok     permite  git branch --merged
+ok     permite  git branch -m viejo nuevo
+ok     permite  git branch fix-db-deploy
+ok     permite  git branch --sort=-committerdate
+ok     permite  git push --fol origin feat/x
+ok     permite  git push origin feat/x 2>&1 | tail -5
+ok     permite  git push origin feat/main-fix
+ok     permite  git push origin main:feat/x
+ok     permite  git push origin feat/x && git checkout main
+ok     permite  git checkout main
+ok     permite  git push --dry-run origin feat/x
+ok     bloquea  GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x
+== guard-commands.sh: falso positivo aceptado (no respeta comillas, para ver dentro de bash -c)
+ok     bloquea  git commit -m "revertir el git push --force de ayer"
+== guard-commands.sh: awk roto (fail-closed solo si el comando menciona push o branch)
+-- awk sale con 0 sin imprimir nada
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git branch -d rama
+ok     permite  git status
+-- awk sale con 1 sin imprimir nada
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git branch -d rama
+ok     permite  git status
+-- awk sale con 2 sin imprimir nada
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git branch -d rama
+ok     permite  git status
+== guard-commands.sh: gh pr merge y rutas de gobierno (.claude/rutas-gobierno.txt), con gh falso
+ok     permite  gh pr merge 101 --squash
+ok     bloquea  gh pr merge --squash
+ok     bloquea  git switch fix/gobierno && gh pr merge --squash
+ok     bloquea  gh pr merge fix/gobierno --squash
+ok     bloquea  gh pr merge https://github.com/o/r/pull/102 --squash
+ok     bloquea  gh pr merge 102 --squash
+ok     bloquea  gh pr merge 103 --squash
+ok     bloquea  gh pr merge 104 --squash
+ok     bloquea  gh pr merge 105 --squash
+ok     bloquea  gh pr merge 106 --squash
+ok     bloquea  gh pr merge 107 --squash
+ok     bloquea  gh pr merge 108 --squash
+ok     bloquea  gh pr merge 109 --squash
+ok     bloquea  gh pr merge 110 --squash
+ok     bloquea  gh pr merge 111 --squash
+ok     bloquea  gh pr merge 112 --squash
+ok     bloquea  gh pr merge 113 --squash
+ok     permite  gh pr merge 131 --squash
+ok     permite  gh pr merge 132 --squash
+ok     permite  gh pr merge 133 --squash
+ok     permite  gh pr merge 134 --squash
+ok     permite  gh pr merge 135 --squash
+ok     permite  gh pr merge 136 --squash
+ok     bloquea  gh pr merge 115 --squash
+ok     bloquea  gh pr merge 116 --squash
+ok     bloquea  gh pr merge 117 --squash
+ok     bloquea  gh pr merge 118 --squash
+ok     bloquea  gh pr merge 119 --squash
+ok     bloquea  gh pr merge 101 --squash && gh pr merge 102 --squash
+ok     bloquea  gh pr merge 101 102
+ok     permite  gh pr merge --subject 7 101
+ok     bloquea  gh pr merge -t 7 102
+ok     permite  gh pr merge 101 --body "texto con espacios"
+ok     bloquea  gh pr merge 101 --body "sin cerrar
+ok     bloquea  gh pr merge -R otro/repo 101
+ok     bloquea  gh pr merge -Rotro/repo 101
+-- redirecciones y separadores dentro de comillas
+ok     permite  gh pr merge 101 --squash 2>&1
+ok     permite  gh pr merge 101 --squash 2>/dev/null
+ok     permite  gh pr merge 101 --squash > merge.log
+ok     permite  gh pr merge 101 --squash >merge.log
+ok     permite  gh pr merge 101 --squash &>/dev/null
+ok     permite  gh pr merge 101 --squash 2>&1 | tail -5
+ok     bloquea  gh pr merge 102 --squash 2>&1
+ok     bloquea  gh pr merge 102 --squash > merge.log
+ok     permite  gh pr merge 101 --body "R&D listo" --squash
+ok     permite  gh pr merge 101 --body "revisión; lista" --squash
+ok     permite  gh pr merge 101 --subject 'a | b' --squash
+ok     bloquea  gh pr merge 102 --body "R&D; listo" --squash
+ok     bloquea  gh pr merge 101 --body "sigue a gh pr merge 100"
+-- formas de escribir el merge
+ok     permite  echo hola && gh pr merge 101 --squash
+ok     permite  gh pr merge 101 --squash # listo
+ok     bloquea  (gh pr merge 102 --squash)
+ok     bloquea  gh pr -R otro/repo merge 101
+ok     bloquea  gh  pr merge 102 --squash
+ok     bloquea  gh pr merge; echo listo
+ok     bloquea  GH_REPO=otro/repo gh pr merge 101 --squash
+ok     permite  gh pr create --title "fix merge conflicts" --body x
+ok     permite  gh pr comment 101 --body "please merge"
+ok     permite  gh pr view 101 --json mergeable
+== guard-commands.sh: flags de gh pr merge, con gh falso
+ok     bloquea  gh pr merge 101 -d
+ok     bloquea  gh pr merge 101 --delete-branch
+ok     bloquea  gh pr merge 101 --squash -d
+ok     bloquea  gh pr merge 101 -sd
+ok     bloquea  gh pr merge 101 --auto
+ok     bloquea  gh pr merge 101 --squash --auto
+ok     bloquea  gh pr merge 101 --admin=true
+ok     bloquea  gh pr merge 101 --admin=false
+ok     bloquea  gh pr merge 101 --auto=true
+ok     bloquea  gh pr merge 101 --delete-branch=true
+ok     bloquea  gh pr merge 101 -d=true
+ok     bloquea  gh pr merge 101 -sd=true
+ok     bloquea  gh pr merge 101 -ds
+ok     permite  gh pr merge 101 -tdocs
+ok     permite  gh pr merge 101 -bdone
+ok     permite  gh pr merge 101 -t=7
+ok     permite  gh pr merge 101 -st asunto
+ok     bloquea  gh pr merge -st 7 102
+ok     permite  gh pr merge 101 --merge
+ok     permite  gh pr merge 101 --rebase
+ok     permite  gh pr merge 101 --disable-auto
+ok     permite  gh pr merge 101 -s
+ok     permite  gh pr merge 101 -m
+ok     permite  gh pr merge 101 -r
+ok     permite  gh pr merge 101 --subject x
+ok     permite  gh pr merge 101 --body x
+ok     permite  gh pr merge 101 --match-head-commit abc123
+== guard-commands.sh: archivo de reglas, con una copia del hook y gh falso
+-- control
+ok     permite  gh pr merge 101 --squash
+ok     bloquea  gh pr merge 102 --squash
+-- ausente
+ok     bloquea  gh pr merge 101 --squash
+-- vacio
+ok     bloquea  gh pr merge 101 --squash
+-- ilegible
+ok     bloquea  gh pr merge 101 --squash
+-- crlf
+ok     permite  gh pr merge 101 --squash
+ok     bloquea  gh pr merge 102 --squash
+-- no-soportada
+ok     bloquea  gh pr merge 101 --squash
+-- barra-interna-dir
+ok     bloquea  gh pr merge 101 --squash
+-- barra-interna-archivo
+ok     bloquea  gh pr merge 101 --squash
+== guard-commands.sh: credenciales (bloquea)
+ok     bloquea  grep -rn GH_TOKEN .
+ok     bloquea  echo "$GH_TOKEN"
+ok     bloquea  echo ${GITHUB_TOKEN}
+ok     bloquea  echo ghp_
+ok     bloquea  echo github_pat_
+ok     bloquea  cat .claude/settings.local.json
+ok     bloquea  grep -rn helper .claude/settings.local.json
+ok     bloquea  cat ~/.talos-gh/hosts.yml
+ok     bloquea  ls ~/.talos-gh
+ok     bloquea  gh auth token
+ok     bloquea  gh auth status -t
+ok     bloquea  gh auth status --show-token
+ok     bloquea  gh auth git-credential get
+ok     bloquea  git credential fill < /dev/null
+ok     bloquea  git credential approve
+ok     bloquea  env
+ok     bloquea  ls && env
+ok     bloquea  env | sort
+ok     bloquea  printenv
+ok     bloquea  set
+ok     bloquea  export
+ok     bloquea  export -p
+ok     bloquea  declare -p
+ok     bloquea  declare -x
+ok     bloquea  typeset
+ok     bloquea  printenv -0
+ok     bloquea  env -u FOO
+ok     bloquea  env LANG=C
+ok     bloquea  gh --hostname github.com auth token
+ok     bloquea  gh auth --hostname github.com status -t
+ok     bloquea  gh config get -h github.com oauth_token
+== guard-commands.sh: cambio de identidad (bloquea)
+ok     bloquea  gh auth login
+ok     bloquea  gh auth logout
+ok     bloquea  gh auth switch -u leon2995
+ok     bloquea  gh auth refresh -s workflow
+ok     bloquea  gh auth setup-git
+ok     bloquea  GH_CONFIG_DIR= gh pr list
+ok     bloquea  unset GH_CONFIG_DIR
+ok     bloquea  export GIT_CONFIG_COUNT=0
+ok     bloquea  GIT_CONFIG_PARAMETERS=x git push origin feat/x
+ok     bloquea  git -c credential.helper= push origin feat/x
+ok     bloquea  git config --global credential.helper manager
+ok     bloquea  git config credential.https://github.com.helper x
+ok     bloquea  env -i bash
+ok     bloquea  env - git push -u origin feat/x
+== guard-commands.sh: aprobación de PRs (bloquea)
+ok     bloquea  gh pr review 5 --approve
+ok     bloquea  gh pr review 5 -a
+ok     bloquea  gh pr review 5 -a -b ok
+ok     bloquea  gh pr -R leon2995/pipeline-prueba review 5 --approve
+ok     bloquea  gh -R leon2995/pipeline-prueba pr review 5 -a
+== guard-commands.sh: credenciales e identidad (permitidos)
+ok     permite  gh auth status
+ok     permite  gh pr review 5 --comment -b "ok"
+ok     permite  gh pr review 5 -r -b "faltan pruebas"
+ok     permite  gh pr merge --help
+ok     permite  gh pr merge 101 --help
+ok     permite  git add .claude/settings.local.example.json
+ok     permite  set -e
+ok     permite  export FOO=1
+ok     permite  declare -a lista
+ok     permite  git config --get user.name
+ok     permite  env LANG=C sort
+ok     permite  env -u FOO python x.py
+ok     permite  printenv PATH
+ok     permite  printenv -0 PATH
+ok     permite  env LC_ALL=C sed -i s/a/b/ f
+ok     permite  env LANG=C sort -
+== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
+-- identidad
+-- sin la identidad de talos-bot
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  gh pr create --title x --body y
+ok     bloquea  gh pr merge 101 --squash
+ok     bloquea  gh pr comment 101 --body x
+ok     bloquea  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
+ok     bloquea  gh api graphql -f query=x
+ok     bloquea  gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json
+ok     bloquea  gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh pr create --title x --body y; gh pr view --help
+ok     bloquea  gh pr new --fill
+ok     bloquea  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     bloquea  gh pr -R leon2995/pipeline-prueba edit 5 --title x
+ok     bloquea  gh pr edit 5 --title x
+ok     bloquea  gh pr close 5
+ok     bloquea  gh pr reopen 5
+ok     bloquea  gh pr ready 5
+ok     bloquea  gh pr review 5 --comment -b x
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET
+ok     bloquea  gh api -X "POST" repos/{owner}/{repo}/issues/5/comments
+ok     bloquea  gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x
+ok     bloquea  git -C . push -u origin feat/x
+ok     permite  gh api -XGET repos/{owner}/{repo}/pulls/5
+ok     permite  gh api --method=GET repos/{owner}/{repo}/pulls/5
+ok     permite  git status
+ok     permite  git log --oneline -3
+ok     permite  gh pr view 101
+ok     permite  gh api repos/{owner}/{repo}/pulls/5
+ok     permite  gh api -X GET repos/{owner}/{repo}/pulls/5
+ok     permite  gh pr merge --help
+ok     bloquea  gh pr create --title "T3: soporte de --help" --body-file b.md
+ok     bloquea  gh pr comment 5 --body 'usa -h para ver opciones'
+-- con la identidad de talos-bot
+ok     permite  git commit -m x
+ok     permite  git push -u origin feat/x
+ok     permite  gh pr create --title x --body y
+ok     permite  gh pr merge 101 --squash
+ok     permite  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
+ok     permite  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     permite  git push https://github.com/leon2995/pipeline-prueba.git feat/x
+ok     bloquea  gh pr merge 102 --squash
+ok     bloquea  git push -u remoto-inexistente feat/x
+ok     bloquea  git push git@github.com:leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push --repo=origin feat/x
+-- identidad incompleta o de otra cuenta
+ok     bloquea  git commit -m x
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  gh pr create --title x --body y
+ok     permite  git commit -m x
+-- identidad-vacia
+ok     bloquea  git commit -m x
+-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot
+ok     permite  git commit -m x
+ok     permite  git push -u origin feat/x
+== CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)
+ok     pasa     el CODEOWNERS del repo coincide con rutas-gobierno.txt
+ok     falla    CODEOWNERS al que le falta una regla
+ok     falla    CODEOWNERS con una regla de más
+ok     falla    CODEOWNERS con otro dueño
+ok     falla    CODEOWNERS con dos dueños
+ok     falla    CODEOWNERS con .claude/ anclado a la raíz
+ok     pasa     CODEOWNERS con CRLF
+ok     falla    CODEOWNERS vacío
+ok     falla    CODEOWNERS ausente
+ok     falla    regla **/X/ con barra interna
+ok     falla    regla **/X con barra interna
+ok     falla    rutas-gobierno.txt sin reglas
+== configuración: settings.json, .gitignore, plantilla y CI (C2, C5)
+ok     pasa     settings.json deniega PowerShell
+ok     pasa     settings.json deniega Read(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Read(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Edit(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Edit(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Write(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Write(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Read(~/.talos-gh/**)
+ok     pasa     settings.json deniega Edit(~/.talos-gh/**)
+ok     pasa     settings.json deniega Write(~/.talos-gh/**)
+ok     pasa     .gitignore ignora .claude/settings.local.json
+ok     pasa     jq está instalado (requerido por los chequeos de la plantilla)
+ok     pasa     la plantilla es JSON válido
+ok     pasa     la plantilla apunta GH_CONFIG_DIR a ~/.talos-gh
+ok     pasa     la plantilla fija GIT_CONFIG_COUNT en 2
+ok     pasa     la plantilla fija GIT_CONFIG_KEY_0
+ok     pasa     la plantilla vacía el helper con GIT_CONFIG_VALUE_0
+ok     pasa     la plantilla fija GIT_CONFIG_KEY_1
+ok     pasa     la plantilla usa gh como helper en GIT_CONFIG_VALUE_1
+ok     pasa     la plantilla fija el autor talos-bot
+ok     pasa     la plantilla fija el committer talos-bot
+ok     pasa     la plantilla usa el email noreply del autor
+ok     pasa     la plantilla usa el email noreply del committer
+ok     falla    la plantilla no trae prefijos de token
+ok     pasa     el job hooks corre en ubuntu-latest
+ok     pasa     el job hooks corre la suite
+ok     pasa     el job hooks corre la suite con mawk
+ok     pasa     el job hooks instala mawk si falta (no lo omite)
+ok     pasa     CI corre en pull_request
+ok     pasa     CI corre en push a feat/** y fix/** (bajo push:)
+== readonly-guard.sh (auditor)
+ok     permite  git diff staging...HEAD
+ok     permite  git log --oneline -5
+ok     permite  npm test
+ok     bloquea  git commit -m x
+ok     bloquea  git push origin feat/x
+ok     bloquea  git diff staging...HEAD > cambios.patch
+ok     bloquea  rm archivo.txt
+== protect-acceptance-tests.sh (engineer)
+ok     bloquea  tests/acceptance/test_c1.py
+ok     bloquea  .claude/settings.json
+ok     bloquea  /repo/.claude/hooks/guard-commands.sh
+ok     bloquea  CLAUDE.md
+ok     bloquea  LESSONS.md
+ok     bloquea  docs/adr/0001-stack.md
+ok     bloquea  .github/workflows/ci.yml
+ok     permite  src/app.py
+ok     permite  tests/unit/test_app.py
+-- rutas Windows absolutas (Claude Code en Windows entrega C:\...\x)
+ok     bloquea  C:\Users\dev\repo\tests\acceptance\test_c1.py
+ok     bloquea  C:\Users\dev\repo\.claude\settings.json
+ok     bloquea  C:\Users\dev\repo\.claude\hooks\guard-commands.sh
+ok     bloquea  C:\Users\dev\repo\CLAUDE.md
+ok     bloquea  C:\Users\dev\repo\LESSONS.md
+ok     bloquea  C:\Users\dev\repo\docs\adr\0001-stack.md
+ok     bloquea  C:\Users\dev\repo\.github\workflows\ci.yml
+ok     permite  C:\Users\dev\repo\src\app.py
+ok     permite  C:\Users\dev\repo\tests\unit\test_app.py
+ok     bloquea  C:\Users\dev\repo\CLAUDE.md + \r final
+== only-acceptance-tests.sh (test-writer)
+ok     permite  tests/acceptance/test_c1.py
+ok     bloquea  src/app.py
+ok     bloquea  tests/unit/test_app.py
+-- rutas Windows absolutas
+ok     permite  C:\Users\dev\repo\tests\acceptance\test_c1.py
+ok     bloquea  C:\Users\dev\repo\.claude\settings.json
+ok     bloquea  C:\Users\dev\repo\.claude\hooks\guard-commands.sh
+ok     bloquea  C:\Users\dev\repo\CLAUDE.md
+ok     bloquea  C:\Users\dev\repo\LESSONS.md
+ok     bloquea  C:\Users\dev\repo\docs\adr\0001-stack.md
+ok     bloquea  C:\Users\dev\repo\.github\workflows\ci.yml
+ok     bloquea  C:\Users\dev\repo\src\app.py
+ok     bloquea  C:\Users\dev\repo\tests\unit\test_app.py
+ok     permite  C:\Users\dev\repo\tests\acceptance\test_c1.py + \r final
+== run-tests.sh (Stop del engineer)
+ok     permite  proyecto sin package.json ni pyproject.toml
+ok     permite  tests en rojo con stop_hook_active (evita bucle)
+ok     bloquea  tests en rojo
+ok     permite  tests en verde
+ok     permite  tests en rojo con .pipeline/BLOCKED
+
+395 ok, 0 fallos
