@@ -67,6 +67,7 @@ g bloquea 'git branch -D rama-que-no-existe'
 g bloquea 'git branch -d rama-que-no-existe'
 g bloquea 'git branch --delete rama-que-no-existe'
 g bloquea 'git branch -rd origin/rama'
+g bloquea 'git branch -rD origin/rama'
 
 echo "== guard-commands.sh: main y merge (bloquea)"
 g bloquea 'git push origin main'

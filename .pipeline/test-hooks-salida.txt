@@ -1,0 +1,77 @@
+== guard-commands.sh: push forzado (bloquea)
+ok     bloquea  git push --force origin feat/x
+ok     bloquea  git push origin feat/x --force-with-lease
+ok     bloquea  git push -f origin feat/x
+ok     bloquea  git push -uf origin feat/x
+ok     bloquea  git push origin +feat/x
+ok     bloquea  git push origin feat/x --force
+ok     bloquea  git push origin feat/x -f
+ok     bloquea  git push -fu origin feat/x
+ok     bloquea  git push --force-with-lease=feat/x origin feat/x
+ok     bloquea  git push --force-if-includes origin feat/x
+ok     bloquea  git push origin "+feat/x"
+ok     bloquea  git push origin +HEAD:feat/x
+ok     bloquea  git push --mirror origin
+ok     bloquea  git push --mirr origin
+ok     bloquea  GIT_TRACE=1 git -C . push -f origin feat/x
+ok     bloquea  git -c remote.origin.push=+refs/heads/*:refs/heads/* push origin
+ok     bloquea  git status && git push -f origin feat/x
+ok     bloquea  bash -c "git push -f origin feat/x"
+ok     bloquea  git push origin feat/x \\n  --force
+== guard-commands.sh: borrado de ramas (bloquea)
+ok     bloquea  git branch -D rama-que-no-existe
+ok     bloquea  git branch -d rama-que-no-existe
+ok     bloquea  git branch --delete rama-que-no-existe
+ok     bloquea  git branch -rd origin/rama
+ok     bloquea  git branch -rD origin/rama
+== guard-commands.sh: main y merge (bloquea)
+ok     bloquea  git push origin main
+ok     bloquea  gh pr merge 1 --squash --admin
+== guard-commands.sh: permitidos
+ok     permite  git status
+ok     permite  npm test
+ok     permite  git push -u origin feat/x
+ok     permite  git push --follow-tags origin feat/x
+ok     permite  git push origin feat/x
+ok     permite  git push -u origin fix/hook-force-push
+ok     permite  git push -u origin feat/x && ls -f
+ok     permite  git commit -m "docs: explica por qué push --force está prohibido"
+ok     permite  git stash push -m wip
+ok     permite  git branch --merged
+ok     permite  git branch -m viejo nuevo
+ok     permite  git branch fix-db-deploy
+== guard-commands.sh: falso positivo aceptado (no respeta comillas, para ver dentro de bash -c)
+ok     bloquea  git commit -m "revertir el git push --force de ayer"
+== guard-commands.sh: awk roto (fail-closed solo si el comando menciona push)
+ok     bloquea  git push -u origin feat/x
+ok     permite  git status
+== readonly-guard.sh (auditor)
+ok     permite  git diff staging...HEAD
+ok     permite  git log --oneline -5
+ok     permite  npm test
+ok     bloquea  git commit -m x
+ok     bloquea  git push origin feat/x
+ok     bloquea  git diff staging...HEAD > cambios.patch
+ok     bloquea  rm archivo.txt
+== protect-acceptance-tests.sh (engineer)
+ok     bloquea  tests/acceptance/test_c1.py
+ok     bloquea  .claude/settings.json
+ok     bloquea  /repo/.claude/hooks/guard-commands.sh
+ok     bloquea  CLAUDE.md
+ok     bloquea  LESSONS.md
+ok     bloquea  docs/adr/0001-stack.md
+ok     bloquea  .github/workflows/ci.yml
+ok     permite  src/app.py
+ok     permite  tests/unit/test_app.py
+== only-acceptance-tests.sh (test-writer)
+ok     permite  tests/acceptance/test_c1.py
+ok     bloquea  src/app.py
+ok     bloquea  tests/unit/test_app.py
+== run-tests.sh (Stop del engineer)
+ok     permite  proyecto sin package.json ni pyproject.toml
+ok     permite  tests en rojo con stop_hook_active (evita bucle)
+ok     bloquea  tests en rojo
+ok     permite  tests en verde
+ok     permite  tests en rojo con .pipeline/BLOCKED
+
+65 ok, 0 fallos

@@ -61,8 +61,8 @@ deny_patterns=(
   'git push .* main( |$)'
   'git push .*:main( |$)'
   # Borrar ramas siempre requiere OK de Leonardo: -d (borrado "seguro") se bloquea igual que -D
-  # a propósito, junto con combinados (-rd) y --delete. No lo relajes sin un PR aprobado por él.
-  'git( .*)? branch( .*)? (-[a-z]*d[a-z]*|--delete)( |$)'
+  # a propósito, junto con combinados (-rd, -rD) y --delete. No lo relajes sin un PR aprobado por él.
+  'git( .*)? branch( .*)? (-[a-zA-Z]*[dD][a-zA-Z]*|--delete)( |$)'
   'git reset --hard'
   'git clean -f'
   'rm -rf'
