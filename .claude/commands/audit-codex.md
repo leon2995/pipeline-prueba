@@ -10,7 +10,7 @@ Corre el segundo auditor, Codex, para la subtarea $ARGUMENTS. Codex no ve nada d
 2. Ejecuta Codex en sandbox de solo lectura, con el prompt fijo del auditor:
 
 ```bash
-codex exec --sandbox read-only --output-last-message .pipeline/veredicto-codex-$ARGUMENTS.json \
+codex exec -m gpt-5.6-terra -c model_reasoning_effort='"ultra"' --sandbox read-only --output-last-message .pipeline/veredicto-codex-$ARGUMENTS.json \
 "$(cat .claude/prompts/auditor-codex.md)
 
 TASK: $ARGUMENTS

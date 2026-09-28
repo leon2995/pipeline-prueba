@@ -21,7 +21,8 @@ Riesgo: medio. Toca el control de seguridad del pipeline (`.claude/hooks/guard-c
    - **Decisión: el tokenizador no respeta comillas, a propósito.** Así ve dentro de `bash -c "git push -f"`, `sh -c '...'` o `git submodule foreach 'git push -f'`. Costo aceptado: un `git commit -m` cuyo mensaje diga literalmente `git push --force` se bloquea (se usa `git commit -F archivo`). Un mensaje que diga "push --force" sin "git" delante sí pasa. Ambos casos quedan en los tests.
 3. Reemplazar `'git branch -D'` por un patrón explícito que cubre `-D`, `-d`, combinados (`-rd`) y `--delete`, con comentario de que es intencional. El patrón exige espacio antes del guion, así que nombres como `fix-db-deploy` no disparan; queda un caso permitido en los tests.
 4. Nuevo `scripts/test-hooks.sh` en bash puro: casos de C4, falsos positivos aceptados, awk roto simulado (bloquea `git push -u`, permite `git status`) y casos básicos de los otros hooks (`readonly-guard`, `protect-acceptance-tests`, `only-acceptance-tests`, `run-tests`).
-5. Correr el script, verificar que contra el hook de `staging` falla (prueba de que los tests detectan la regresión), guardar evidencia, auditor Claude y Codex, JEV, PR contra `staging`. Sin merge.
+5. Por pedido explícito de Leonardo (agregado después de la auditoría del plan): fijar el modelo del segundo auditor en `.claude/commands/audit-codex.md` con exactamente `-m gpt-5.6-terra -c model_reasoning_effort='"ultra"'` en el `codex exec`, y anotarlo en la fila "Segundo auditor" de la tabla de roles de `CLAUDE.md`.
+6. Correr el script, verificar que contra el hook de `staging` falla (prueba de que los tests detectan la regresión), guardar evidencia, auditor Claude y Codex, JEV, PR contra `staging`. Sin merge.
 
 **`.claude/agents/engineer.md` no se toca (C3):** el `guard-commands.sh` duplicado en su frontmatter se conserva sin cambios.
 
