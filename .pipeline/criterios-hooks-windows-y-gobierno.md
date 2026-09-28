@@ -65,6 +65,10 @@ Verificación posterior al PASS (fuera de los criterios del auditor): PR contra 
 20. C2: `only-acceptance-tests.sh` recibe los mismos casos de rutas Windows que `protect-acceptance-tests.sh` (`.claude/`, `CLAUDE.md`, `LESSONS.md`, `docs/adr/`, `.github/workflows/` bloquean).
 21. Límite conocido que se deja documentado en el hook: el texto `gh pr merge` dentro de un `--body` cuenta como segundo merge y bloquea con "un merge por comando" (conservador).
 
-**Consecuencia declarada (decisión pendiente de Leonardo):** `**/LESSONS.md` es ruta de gobierno y la Fase 3 paso 5 agrega `new_lesson` a `LESSONS.md` dentro de la subtarea. Todo PR de subtarea con lección nueva lo mergeará Leonardo. La alternativa es juntar las lecciones en PRs aparte; eso cambia el protocolo y no está en este PR.
+### Cierre (decisión de Leonardo tras HUMAN en el intento 2)
+
+Sin intento 3. Los hallazgos del intento 2 quedan como límites conocidos, documentados en el hook y en el PR: `cd` a otro repositorio antes del merge; merges desde PowerShell u otra herramienta distinta de Bash; `GH_REPO` dentro de `--body`; continuación de línea; `gh.exe` y `bash -c`. El hook sigue siendo contra errores; el control real sobre los PRs de gobierno irá en el servidor (cuenta de GitHub propia del agente y CODEOWNERS) en el siguiente PR. Las lecciones nuevas irán en PRs aparte (cambio de protocolo en el siguiente PR).
+
+**Consecuencia declarada (resuelta por Leonardo: las lecciones van en PRs aparte, desde el siguiente PR):** `**/LESSONS.md` es ruta de gobierno y la Fase 3 paso 5 agrega `new_lesson` a `LESSONS.md` dentro de la subtarea. Todo PR de subtarea con lección nueva lo mergeará Leonardo. La alternativa es juntar las lecciones en PRs aparte; eso cambia el protocolo y no está en este PR.
 
 Fuera de alcance (modelo de amenaza): `..` en rutas, mayúsculas en rutas Windows, `gh api` o la web para mergear, flags con valor que confunden la detección del número de PR (terminan en `gh` fallando y bloqueando).

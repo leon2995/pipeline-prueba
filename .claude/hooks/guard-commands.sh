@@ -154,8 +154,20 @@ fi
 # gh pr merge: solo a staging, con número de PR explícito, un merge por comando, sin --admin,
 # --auto ni borrar la rama, y nunca un PR que toque (modifique, borre o renombre) una ruta de
 # .claude/rutas-gobierno.txt: esos los mergea Leonardo, también a staging. Si algo no se puede
-# verificar, se bloquea. Límite conocido y conservador: el texto "gh pr merge" dentro de un
-# --body cuenta como un segundo merge y bloquea.
+# verificar, se bloquea.
+# Límites conocidos (auditorías de hooks-windows-y-gobierno). El modelo de amenaza es errores
+# del agente; el control real sobre los PRs de gobierno va en el servidor (cuenta propia del
+# agente y CODEOWNERS). El hook deja pasar:
+# - un cd (o pushd, o un cd de un comando anterior) a otro repositorio antes del merge: consulta
+#   el PR con ese número en el repositorio del directorio de la sesión, no en el del merge;
+# - merges desde PowerShell u otra herramienta distinta de Bash: el hook solo corre con el
+#   matcher "Bash" de .claude/settings.json;
+# - gh.exe pr merge y bash -c "gh pr merge ...", que no se detectan como merge.
+# Y bloquea de más, por conservador:
+# - GH_REPO= o GH_HOST= escritos dentro de un --body o --subject;
+# - un merge partido en varias líneas con \ o un --body de varias líneas (el mensaje es
+#   engañoso); usa una sola línea y --body-file;
+# - el texto "gh pr merge" dentro de un --body, que cuenta como un segundo merge.
 # Detección amplia: gh pr merge con flags (y sus valores) entre gh, pr y merge, espacios de más,
 # o dentro de ( ) o `...`. Un "merge" en el texto de otro subcomando (gh pr create --title
 # "fix merge") no cuenta, porque entre pr y merge solo se admiten flags.

@@ -1,6 +1,7 @@
 # Evidencia: hooks-windows-y-gobierno
 
-- **Estado:** intento 2, listo para auditoría de código.
+- **Estado:** cerrado por decisión de Leonardo tras HUMAN en el intento 2 (auditor Claude `pass`, Codex `fail`, JEV "auditores en desacuerdo"). Sin intento 3: los hallazgos del intento 2 quedan como límites conocidos en el hook y en el PR; el control real sobre los PRs de gobierno irá en el servidor (cuenta de GitHub propia del agente y CODEOWNERS) en el siguiente PR. PR contra `staging` sin mergear.
+- **Intento 2:** Claude `pass` (1 media preexistente: el hook no cubre la herramienta PowerShell; 2 bajas: continuación de línea, `gh.exe` y `bash -c`) y Codex `fail` (1 alta: `cd` a otro repo antes del merge; 1 media: `GH_REPO` dentro de `--body`). Veredictos en `.pipeline/veredicto-hooks-windows-y-gobierno.json` y `.pipeline/veredicto-codex-hooks-windows-y-gobierno.json`.
 - **Intento 1:** JEV FIX. Claude `fail` (1 alta: sin número se revisaba el PR de la rama actual; 1 media: redirecciones; 1 baja) y Codex `fail` (3 altas: `--admin=true`, `-d=true`, casos Windows faltantes en `only-acceptance-tests.sh`; 1 media: separadores dentro de comillas). Veredictos en `.pipeline/veredicto-hooks-windows-y-gobierno-intento1.json` y `.pipeline/veredicto-codex-hooks-windows-y-gobierno-intento1.json`. Todos corregidos en el intento 2, cada uno con casos en la suite.
 - **Rama:** `fix/hooks-windows-y-gobierno` (desde `staging`).
 - **Implementó:** CTO (sesión principal). Todo es `.claude/`, `CLAUDE.md`, `scripts/test-hooks.sh` o `SETUP.md`.
