@@ -6,7 +6,8 @@ set -uo pipefail
 hooks="$(cd "$(dirname "$0")/.." && pwd)/.claude/hooks"
 ok=0
 fallos=0
-extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas
+extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas o un gh falso
+hooks_alt=""    # si no está vacío, se corre el hook de este directorio (copia) en lugar del real
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -19,22 +20,25 @@ esc() {
   printf '%s' "$s"
 }
 
-# caso <hook> <bloquea|permite> <json> <descripción>
+# caso <hook> <bloquea|permite> <json> <descripción> [motivo]
+# Con motivo, además del código de salida exige que stderr contenga ese texto: un hook
+# fail-closed puede bloquear por una razón distinta de la que se quiere probar.
 caso() {
-  local hook=$1 quiere=$2 json=$3 desc=${4//$'\n'/\\n} esperado=0 salio
+  local hook=$1 quiere=$2 json=$3 desc=${4//$'\n'/\\n} motivo=${5:-} esperado=0 salio err
   [ "$quiere" = bloquea ] && esperado=2
-  printf '%s' "$json" | PATH="$extra_path$PATH" bash "$hooks/$hook" >/dev/null 2>&1
+  err=$(printf '%s' "$json" | PATH="$extra_path$PATH" bash "${hooks_alt:-$hooks}/$hook" 2>&1 >/dev/null)
   salio=$?
-  if [ "$salio" -eq "$esperado" ]; then
+  if [ "$salio" -eq "$esperado" ] && { [ -z "$motivo" ] || [[ "$err" == *"$motivo"* ]]; }; then
     ok=$((ok + 1))
     printf 'ok     %-8s %s\n' "$quiere" "$desc"
   else
     fallos=$((fallos + 1))
-    printf 'FALLO  %-8s %s (esperaba %s, salió %s)\n' "$quiere" "$desc" "$esperado" "$salio"
+    printf 'FALLO  %-8s %s (esperaba %s, salió %s)%s\n' "$quiere" "$desc" "$esperado" "$salio" \
+      "${motivo:+; motivo esperado: \"$motivo\"; stderr: \"$err\"}"
   fi
 }
 # Atajos por tipo de evento: comando Bash, ruta de Edit/Write y Stop.
-bash_cmd() { caso "$1" "$2" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$(esc "$3")\"}}" "$3"; }
+bash_cmd() { caso "$1" "$2" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$(esc "$3")\"}}" "$3" "${4:-}"; }
 archivo() { caso "$1" "$2" "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$(esc "$3")\",\"content\":\"x\"}}" "$3"; }
 stop() { caso run-tests.sh "$1" "{\"hook_event_name\":\"Stop\",\"cwd\":\"$(esc "$2")\",\"stop_hook_active\":$3}" "$4"; }
 
@@ -146,6 +150,140 @@ for codigo in 0 1 2; do
 done
 extra_path=""
 
+# gh falso: responde solo las consultas que hace guard-commands.sh, según el número de PR.
+# También responde la consulta del hook anterior (--json baseRefName -q .baseRefName) para que
+# la suite corrida contra hooks viejos (mutación) falle por la regla y no por el gh falso.
+mkdir -p "$tmp/gh-falso"
+cat > "$tmp/gh-falso/gh" <<'GH'
+#!/usr/bin/env bash
+args="$*"
+n=$(printf '%s\n' "$@" | grep -Eo '^[0-9]+$|/pulls/[0-9]+/' | grep -Eo '[0-9]+' | head -n1)
+[ -z "$n" ] && n=101   # sin número: PR de la rama actual
+base=staging total="" renombres=() falla_api=0
+case "$n" in
+  101) rutas=(src/app.py) ;;
+  102) rutas=(CLAUDE.md) ;;
+  103) rutas=(sub/CLAUDE.md) ;;
+  104) rutas=(LESSONS.md) ;;
+  105) rutas=(.claude/hooks/guard-commands.sh) ;;
+  106) rutas=(sub/.claude/settings.json) ;;
+  107) rutas=(.github/workflows/ci.yml) ;;
+  108) rutas=(scripts/jev.py) ;;
+  109) rutas=(scripts/test-hooks.sh) ;;
+  110) rutas=(scripts/run-task.sh) ;;
+  111) rutas=(scripts/resume-task.sh) ;;
+  112) rutas=(scripts/watch-deploy.sh) ;;
+  113) rutas=(scripts/router/jev.py) renombres=(scripts/jev.py) ;;
+  115) base=main rutas=(src/app.py) ;;
+  116) exit 1 ;;
+  117) rutas=(src/app.py) falla_api=1 ;;
+  118) rutas=(src/app.py) total=150 ;;
+  119) rutas=() ;;
+  131) rutas=(docs/claude-notas.md) ;;
+  132) rutas=(docs/MYCLAUDE.md) ;;
+  133) rutas=(scripts/jev.py.bak) ;;
+  134) rutas=(src/scripts/jev.py) ;;
+  135) rutas=(.claude-old/x) ;;
+  136) rutas=(docs/.github/x) ;;
+  *) exit 1 ;;
+esac
+[ -z "$total" ] && total=${#rutas[@]}
+case "$args" in
+  "pr view"*"--json number,baseRefName,changedFiles,files --jq "*)
+    printf '%s\n' "$n" "$base" "$total" "${#rutas[@]}" ${rutas[@]+"${rutas[@]}"} ;;
+  "pr view"*"--json baseRefName -q .baseRefName")
+    printf '%s\n' "$base" ;;
+  "api repos/{owner}/{repo}/pulls/$n/files --paginate --jq "*)
+    [ "$falla_api" = 1 ] && exit 1
+    [ ${#renombres[@]} -gt 0 ] && printf '%s\n' "${renombres[@]}" ;;
+  *) exit 1 ;;
+esac
+exit 0
+GH
+chmod +x "$tmp/gh-falso/gh"
+
+echo "== guard-commands.sh: gh pr merge y rutas de gobierno (.claude/rutas-gobierno.txt), con gh falso"
+extra_path="$tmp/gh-falso:"
+g permite 'gh pr merge 101 --squash'
+g permite 'gh pr merge --squash'
+g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
+g bloquea 'gh pr merge 103 --squash' 'ruta de gobierno sub/CLAUDE.md'
+g bloquea 'gh pr merge 104 --squash' 'ruta de gobierno LESSONS.md'
+g bloquea 'gh pr merge 105 --squash' 'ruta de gobierno .claude/hooks/guard-commands.sh'
+g bloquea 'gh pr merge 106 --squash' 'ruta de gobierno sub/.claude/settings.json'
+g bloquea 'gh pr merge 107 --squash' 'ruta de gobierno .github/workflows/ci.yml'
+g bloquea 'gh pr merge 108 --squash' 'ruta de gobierno scripts/jev.py'
+g bloquea 'gh pr merge 109 --squash' 'ruta de gobierno scripts/test-hooks.sh'
+g bloquea 'gh pr merge 110 --squash' 'ruta de gobierno scripts/run-task.sh'
+g bloquea 'gh pr merge 111 --squash' 'ruta de gobierno scripts/resume-task.sh'
+g bloquea 'gh pr merge 112 --squash' 'ruta de gobierno scripts/watch-deploy.sh'
+g bloquea 'gh pr merge 113 --squash' 'ruta de gobierno scripts/jev.py'
+g permite 'gh pr merge 131 --squash'
+g permite 'gh pr merge 132 --squash'
+g permite 'gh pr merge 133 --squash'
+g permite 'gh pr merge 134 --squash'
+g permite 'gh pr merge 135 --squash'
+g permite 'gh pr merge 136 --squash'
+g bloquea 'gh pr merge 115 --squash' 'base staging'
+g bloquea 'gh pr merge 116 --squash' 'no pude consultar el PR'
+g bloquea 'gh pr merge 117 --squash' 'no pude consultar los renombres'
+g bloquea 'gh pr merge 118 --squash' 'lista incompleta'
+g bloquea 'gh pr merge 119 --squash' 'sin archivos'
+g bloquea 'gh pr merge 101 --squash && gh pr merge 102 --squash' 'un merge por comando'
+g bloquea 'gh pr merge 101 102' 'un único PR'
+g permite 'gh pr merge --subject 7 101'
+g bloquea 'gh pr merge -t 7 102' 'ruta de gobierno CLAUDE.md'
+g permite 'gh pr merge 101 --body "texto con espacios"'
+g bloquea 'gh pr merge 101 --body "sin cerrar' 'comillas'
+g bloquea 'gh pr merge -R otro/repo 101' 'otro repositorio'
+
+echo "== guard-commands.sh: flags de gh pr merge, con gh falso"
+g bloquea 'gh pr merge 101 -d' 'borrar ramas'
+g bloquea 'gh pr merge 101 --delete-branch' 'borrar ramas'
+g bloquea 'gh pr merge 101 --squash -d' 'borrar ramas'
+g bloquea 'gh pr merge 101 -sd' 'borrar ramas'
+g bloquea 'gh pr merge 101 --auto' 'sin --auto'
+g bloquea 'gh pr merge 101 --squash --auto' 'sin --auto'
+g permite 'gh pr merge 101 --merge'
+g permite 'gh pr merge 101 --rebase'
+g permite 'gh pr merge 101 --disable-auto'
+g permite 'gh pr merge 101 -s'
+g permite 'gh pr merge 101 -m'
+g permite 'gh pr merge 101 -r'
+g permite 'gh pr merge 101 --subject x'
+g permite 'gh pr merge 101 --body x'
+g permite 'gh pr merge 101 --match-head-commit abc123'
+
+echo "== guard-commands.sh: archivo de reglas, con una copia del hook y gh falso"
+# variante <nombre>: copia guard-commands.sh y _lib.sh a $tmp/reglas/<nombre>/.claude/hooks y la usa.
+variante() {
+  mkdir -p "$tmp/reglas/$1/.claude/hooks"
+  cp "$hooks/guard-commands.sh" "$hooks/_lib.sh" "$tmp/reglas/$1/.claude/hooks/"
+  hooks_alt="$tmp/reglas/$1/.claude/hooks"
+  echo "-- $1"
+}
+variante control
+cp "$hooks/../rutas-gobierno.txt" "$tmp/reglas/control/.claude/" 2>/dev/null
+g permite 'gh pr merge 101 --squash'
+g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
+variante ausente
+g bloquea 'gh pr merge 101 --squash' 'no pude leer'
+variante vacio
+printf '# solo comentarios\n\n   \n' > "$tmp/reglas/vacio/.claude/rutas-gobierno.txt"
+g bloquea 'gh pr merge 101 --squash' 'no tiene reglas'
+variante ilegible
+mkdir "$tmp/reglas/ilegible/.claude/rutas-gobierno.txt"
+g bloquea 'gh pr merge 101 --squash' 'no pude leer'
+variante crlf
+awk '{ printf "%s\r\n", $0 }' "$hooks/../rutas-gobierno.txt" > "$tmp/reglas/crlf/.claude/rutas-gobierno.txt" 2>/dev/null
+g permite 'gh pr merge 101 --squash'
+g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
+variante no-soportada
+printf '**/CLAUDE.md\n*.sh\n' > "$tmp/reglas/no-soportada/.claude/rutas-gobierno.txt"
+g bloquea 'gh pr merge 101 --squash' 'regla no soportada'
+hooks_alt=""
+extra_path=""
+
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }
 r permite 'git diff staging...HEAD'
@@ -167,12 +305,29 @@ p bloquea 'docs/adr/0001-stack.md'
 p bloquea '.github/workflows/ci.yml'
 p permite 'src/app.py'
 p permite 'tests/unit/test_app.py'
+echo "-- rutas Windows absolutas (Claude Code en Windows entrega C:\\...\\x)"
+p bloquea 'C:\Users\dev\repo\tests\acceptance\test_c1.py'
+p bloquea 'C:\Users\dev\repo\.claude\settings.json'
+p bloquea 'C:\Users\dev\repo\.claude\hooks\guard-commands.sh'
+p bloquea 'C:\Users\dev\repo\CLAUDE.md'
+p bloquea 'C:\Users\dev\repo\LESSONS.md'
+p bloquea 'C:\Users\dev\repo\docs\adr\0001-stack.md'
+p bloquea 'C:\Users\dev\repo\.github\workflows\ci.yml'
+p permite 'C:\Users\dev\repo\src\app.py'
+p permite 'C:\Users\dev\repo\tests\unit\test_app.py'
+# \r final: jq nativo de Windows entrega la ruta con CRLF.
+caso protect-acceptance-tests.sh bloquea '{"tool_name":"Write","tool_input":{"file_path":"C:\\Users\\dev\\repo\\CLAUDE.md\r"}}' 'C:\Users\dev\repo\CLAUDE.md + \r final'
 
 echo "== only-acceptance-tests.sh (test-writer)"
 o() { archivo only-acceptance-tests.sh "$@"; }
 o permite 'tests/acceptance/test_c1.py'
 o bloquea 'src/app.py'
 o bloquea 'tests/unit/test_app.py'
+echo "-- rutas Windows absolutas"
+o permite 'C:\Users\dev\repo\tests\acceptance\test_c1.py'
+o bloquea 'C:\Users\dev\repo\src\app.py'
+o bloquea 'C:\Users\dev\repo\tests\unit\test_app.py'
+caso only-acceptance-tests.sh permite '{"tool_name":"Write","tool_input":{"file_path":"C:\\Users\\dev\\repo\\tests\\acceptance\\test_c1.py\r"}}' 'C:\Users\dev\repo\tests\acceptance\test_c1.py + \r final'
 
 echo "== run-tests.sh (Stop del engineer)"
 mkdir -p "$tmp/rojo/.pipeline" "$tmp/verde"
