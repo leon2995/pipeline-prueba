@@ -10,7 +10,7 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 | test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan |
 | engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md |
 | auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md |
-| Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Pro) | Solo criterios y diff |
+| Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Pro, modelo `gpt-5.6-terra` con esfuerzo `ultra`) | Solo criterios y diff |
 | JEV (router) | `scripts/jev.py` | Veredictos. Determinista, sin LLM |
 | Humano | Leonardo | Aprueba la propuesta y mergea el PR a `main` |
 
