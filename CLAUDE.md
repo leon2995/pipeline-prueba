@@ -16,7 +16,7 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 
 Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo que su fila indica, por escrito, dentro del prompt de delegación. Si necesitas que sepa algo más, escríbelo en el prompt; nunca asumas que lo sabe.
 
-**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot`, colaboradora del repo con escritura, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). Leonardo es `leon2995`: dueño del repo y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
+**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot-leon`, colaboradora del repo con escritura, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). Leonardo es `leon2995`: dueño del repo y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
 
 **Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles: el commit de pruebas va primero, la suite se corre contra `staging` para mostrar que detecta la regresión (mutación), auditan los dos auditores y Leonardo aprueba como code owner.
 
@@ -77,9 +77,9 @@ Por cada subtarea, en este orden:
 
 ## Fase 4: Integración y deploy
 
-- Los PRs los abre `talos-bot`. PR sin rutas de gobierno: CI en verde y `PASS` → merge a `staging` con `gh pr merge <n> --squash`, siempre con el número del PR (el hook bloquea la forma sin número). PR con rutas de gobierno: lo aprueba y lo mergea Leonardo, también a `staging`; el servidor exige su aprobación como code owner y el hook bloquea tu merge. Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
+- Los PRs los abre `talos-bot-leon`. PR sin rutas de gobierno: CI en verde y `PASS` → merge a `staging` con `gh pr merge <n> --squash`, siempre con el número del PR (el hook bloquea la forma sin número). PR con rutas de gobierno: lo aprueba y lo mergea Leonardo, también a `staging`; el servidor exige su aprobación como code owner y el hook bloquea tu merge. Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
 - Corre `/verificar-deploy staging`. Si falla: PR de revert a `staging` y `HUMAN`.
-- Si staging pasa: abre (como `talos-bot`) el PR de `staging` a `main` con el resumen de todas las subtareas, la evidencia y los veredictos. Leonardo lo aprueba y lo mergea él mismo desde GitHub (web o app); `main` exige una aprobación y la del code owner si hay rutas de gobierno. Tú nunca mergeas ni empujas a `main`; el hook lo bloquea.
+- Si staging pasa: abre (como `talos-bot-leon`) el PR de `staging` a `main` con el resumen de todas las subtareas, la evidencia y los veredictos. Leonardo lo aprueba y lo mergea él mismo desde GitHub (web o app); `main` exige una aprobación y la del code owner si hay rutas de gobierno. Tú nunca mergeas ni empujas a `main`; el hook lo bloquea.
 - Tras el merge a `main`, corre `/verificar-deploy production`. Si falla: abre PR de revert a `main` y `HUMAN`.
 - Reporte final: URLs, veredictos, intentos y tiempo por subtarea.
 
@@ -95,10 +95,10 @@ Por cada subtarea, en este orden:
 
 ## Credenciales
 
-- El token de `talos-bot` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
+- El token de `talos-bot-leon` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
 - Qué procesos pueden llegar a las credenciales: `gh` y `git` (por el helper `gh auth git-credential`) y cualquier proceso hijo de la sesión, incluido Codex, que hereda `GH_CONFIG_DIR` y podría leer el archivo si lo buscara. El hook bloquea los comandos que nombran tokens o esos archivos, los que imprimen credenciales o variables de entorno y los que cambian de cuenta. `Read`, `Edit` y `Write` están denegados sobre `settings.local.json` y `~/.talos-gh`.
 - La herramienta PowerShell está denegada en `.claude/settings.json`: el agente usa solo Bash, que es donde corren los hooks.
-- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
+- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot-leon` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
 
 ## Prohibido sin excepción
 

@@ -31,10 +31,10 @@ cmd=$(printf '%s' "$input" | json_get command)
 [ -z "$cmd" ] && exit 0
 
 # Credenciales e identidad del agente (cuenta-agente). Modelo de amenaza: errores del agente. El
-# agente trabaja como talos-bot con GH_CONFIG_DIR apuntando a ~/.talos-gh (fuera del repo), donde
+# agente trabaja como talos-bot-leon con GH_CONFIG_DIR apuntando a ~/.talos-gh (fuera del repo), donde
 # vive su token; la configuración sale de .claude/settings.local.json. Se bloquea lo que un agente
 # haría por costumbre y expondría una credencial, cambiaría de cuenta o aprobaría un PR.
-# Límites conocidos de esta sección y de la identidad de talos-bot (C3 y C4 de cuenta-agente), que
+# Límites conocidos de esta sección y de la identidad de talos-bot-leon (C3 y C4 de cuenta-agente), que
 # no se persiguen porque son sintaxis de shell y no errores comunes; el servidor (CODEOWNERS,
 # protección de ramas, el autor no aprueba su PR) es el control efectivo:
 # - un ; & | dentro de comillas parte el análisis y esconde los flags que siguen:
@@ -54,7 +54,7 @@ cmd=$(printf '%s' "$input" | json_get command)
 # - C4 compara el nombre del autor y del committer, no el email (el paso f lo verifica con git var);
 # - C4 revisa git commit, git push, los gh pr que escriben y gh api de escritura; gh issue, gh run
 #   rerun, gh workflow run, gh label y gh release no se revisan, y gh api .../reviews con
-#   event=APPROVE no se bloquea como aprobación (sale como talos-bot y el servidor lo acota).
+#   event=APPROVE no se bloquea como aprobación (sale como talos-bot-leon y el servidor lo acota).
 bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
 # I: inicio de una invocación. F: opciones (con su valor) entre gh o git y el subcomando, o entre
 # el grupo y el subcomando (gh -R o/r pr review, gh pr -R o/r review, gh --hostname x auth token).
@@ -94,7 +94,7 @@ env_imprime() {
   return 0
 }
 # env_vacia <segmento>: env con -i, --ignore-environment o - entre sus propias opciones (antes del
-# comando que corre): vacía el entorno y con él la identidad de talos-bot. Un -i del comando que env
+# comando que corre): vacía el entorno y con él la identidad de talos-bot-leon. Un -i del comando que env
 # corre (env LC_ALL=C sed -i ...) no cuenta.
 env_vacia() {
   local t salta=0
@@ -119,10 +119,10 @@ while IFS= read -r seg; do
   seg="${seg%"${seg##*[![:space:]]}"}"
   seg=${seg#\(}
   env_imprime "$seg" && bloqueo credenciales "el comando imprime variables de entorno ($seg)."
-  env_vacia "$seg" && bloqueo identidad "el comando vacía el entorno (env -i) y con él la identidad de talos-bot."
+  env_vacia "$seg" && bloqueo identidad "el comando vacía el entorno (env -i) y con él la identidad de talos-bot-leon."
 done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
 if printf '%s\n' "$cmd" | grep -Eq "GH_CONFIG_DIR|GIT_CONFIG_|${I}gh$F +auth$F +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|\$)|${I}git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)"; then
-  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot sale de .claude/settings.local.json."
+  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot-leon sale de .claude/settings.local.json."
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +pr$F +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |\$))"; then
   bloqueo aprobación "el agente nunca aprueba PRs; la aprobación de code owner es de Leonardo."
@@ -247,10 +247,10 @@ if printf '%s' "$cmd" | grep -Eq '^railway variables' && ! printf '%s' "$cmd" | 
   echo "Bloqueado: 'railway variables' solo se permite listando nombres, por ejemplo: railway variables --kv | cut -d= -f1" >&2
   exit 2
 fi
-# Identidad de talos-bot (C4 de cuenta-agente). Se activa cuando existe .claude/identidad-agente.txt
-# con el login esperado: desde ahí, sin la identidad de talos-bot se bloquean commits, push y
+# Identidad de talos-bot-leon (C4 de cuenta-agente). Se activa cuando existe .claude/identidad-agente.txt
+# con el login esperado: desde ahí, sin la identidad de talos-bot-leon se bloquean commits, push y
 # escrituras en GitHub en lugar de volver en silencio a la cuenta de Leonardo. Sin el archivo no se
-# exige (arranque, antes de conectar talos-bot).
+# exige (arranque, antes de conectar talos-bot-leon).
 archivo_identidad="$(dirname "$0")/../identidad-agente.txt"
 if [ -e "$archivo_identidad" ]; then
   # Cada segmento (separado por ; & | o salto de línea) se clasifica por separado: una invocación
@@ -286,14 +286,14 @@ if [ -e "$archivo_identidad" ]; then
   done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
   if [ "$escribe_git" = 1 ] || [ "$escribe_gh" = 1 ]; then
     esperado=$(tr -d '[:space:]' < "$archivo_identidad" 2>/dev/null)
-    falta="falta la identidad de talos-bot (.claude/settings.local.json)"
+    falta="falta la identidad de talos-bot-leon (.claude/settings.local.json)"
     [ -n "$esperado" ] || bloqueo identidad "$falta: .claude/identidad-agente.txt está vacío o no se puede leer."
     { [ -n "${GH_CONFIG_DIR:-}" ] && [ -n "${GIT_CONFIG_COUNT:-}" ]; } ||
       bloqueo identidad "$falta: GH_CONFIG_DIR o GIT_CONFIG_COUNT no están definidas en la sesión."
     { [ "${GIT_AUTHOR_NAME:-}" = "$esperado" ] && [ "${GIT_COMMITTER_NAME:-}" = "$esperado" ]; } ||
       bloqueo identidad "$falta: el autor o el committer de los commits no es $esperado."
     if [ "$empuja" = 1 ]; then
-      # git push: la credencial tiene que salir de gh (talos-bot) y no del Git Credential Manager de
+      # git push: la credencial tiene que salir de gh (talos-bot-leon) y no del Git Credential Manager de
       # Leonardo. Se exige la configuración exacta de la plantilla, que el helper efectivo para
       # github.com sea gh y que el remoto sea HTTPS sin usuario (por SSH saldría la llave de Leonardo).
       clave='credential.https://github.com.helper'
