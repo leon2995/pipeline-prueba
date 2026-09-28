@@ -10,6 +10,7 @@ Riesgo: medio. Toca el control de seguridad del pipeline (`.claude/hooks/guard-c
   - permitidos (exit 0): `git status`, `npm test`, `git push -u origin feat/x`, `git push --follow-tags origin feat/x`.
   El script termina con código distinto de 0 si algún caso falla.
 - **C5.** Rama `fix/hook-force-push`, PR contra `staging` con la salida de `scripts/test-hooks.sh` en la descripción. No se mergea sin OK de Leonardo.
+  *Verificación (anotada con OK de Leonardo):* C5 se verifica con el PR abierto, después de que JEV devuelva PASS; por protocolo no puede tener evidencia dentro del diff auditado. El criterio no cambia.
 
 ## Plan
 
