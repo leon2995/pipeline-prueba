@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 # Bloquea comandos peligrosos en cualquier agente. Recibe el JSON del hook por stdin.
 # Salida 2 = bloquear y devolver el mensaje de stderr al agente.
+#
+# Modelo de amenaza: errores de un agente, no ofuscación deliberada. El hook bloquea el push
+# forzado y el borrado de ramas escritos de forma directa o con sintaxis de shell común. El
+# control efectivo sobre main y staging es la protección de ramas de GitHub
+# (allow_force_pushes y allow_deletions en false, enforce_admins en true). Las ramas de
+# trabajo (feat/*, fix/*) no tienen esa protección: ahí el hook es la única barrera.
+#
+# Auditorías de hook-force-push. Ronda 1: sus evasiones están cerradas y tienen caso en
+# scripts/test-hooks.sh (--for"ce", git >/dev/null push -f, --m, git branch '-d', \r final,
+# awk roto que sale con 1). Ronda 2 y límites declarados: el hook las deja pasar y no se
+# persiguen, porque imitar la gramática de bash con awk nunca queda completo; cada ronda de
+# auditoría encontró otra construcción.
+# - Separador dentro de comillas o escapado: git push origin "a&b" -f, git push
+#   "https://host/repo.git?a=1&b=2" -f, git push origin "a;b" -d rama, git push origin a\&b -f.
+# - Redirección pegada a git: git>/dev/null push -f, git>/dev/null branch -d rama.
+# - Continuación de línea dentro de un flag: git push -\<salto de línea>f, git branch -\<salto>d.
+# - Expansión de llaves: git push -{u,f}, git branch -{r,d} origin/rama.
+# - Config indirecta: FORCE=+HEAD:refs/heads/x git --config-env=remote.origin.push=FORCE push,
+#   y la forma separada git --config-env remote.origin.push=FORCE push.
+# - Flag en variable (V=--force; git push origin x $V), en sustitución de comandos
+#   (git push origin x $(printf '\x2df')) o en escape hexadecimal (git push origin $'\x2df' x).
+# - Config persistente y aliases: git config remote.origin.push +refs/heads/*:refs/heads/*,
+#   git config alias.pf "push --force".
 set -uo pipefail
 . "$(dirname "$0")/_lib.sh"
 input=$(cat)

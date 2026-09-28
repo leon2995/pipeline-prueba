@@ -1,9 +1,26 @@
 # Evidencia: hook-force-push
 
-- **Estado:** intento 2, listo para auditoría de código.
+- **Estado:** cerrado por decisión de Leonardo tras HUMAN. PR contra `staging` sin mergear.
 - **Rama:** `fix/hook-force-push` (desde `staging`).
 - **Implementó:** CTO (sesión principal). El engineer no puede modificar `.claude/`.
-- **Intento 1:** JEV devolvió FIX (Claude y Codex en `fail`). Hallazgos en `.pipeline/veredicto-hook-force-push-intento1.json` y `.pipeline/veredicto-codex-hook-force-push-intento1.json`.
+- **Intento 1:** JEV devolvió FIX (Claude y Codex en `fail`). Hallazgos en `.pipeline/veredicto-hook-force-push-intento1.json` y `.pipeline/veredicto-codex-hook-force-push-intento1.json`. Los hallazgos de código quedaron corregidos en el intento 2, cada uno con su caso en la suite; el de C5 (falta de PR) se resuelve verificándolo con el PR abierto.
+- **Intento 2:** Claude y Codex en `fail` con evasiones nuevas por sintaxis de bash; JEV devolvió HUMAN por tope de reintentos (`.pipeline/veredicto-hook-force-push.json`, `.pipeline/veredicto-codex-hook-force-push.json`). La primera corrida de Codex del intento 2 falló por límite de uso de la cuenta; se repitió con el mismo prompt tras reconectar la cuenta.
+- **Decisión de Leonardo:** sin intento 3. C1 pasa a declarar el modelo de amenaza (errores, no ofuscación deliberada); las evasiones conocidas se documentan al inicio de `guard-commands.sh` y en el PR.
+
+## Protección de ramas en GitHub (verificada con `gh api repos/leon2995/pipeline-prueba/branches/<rama>/protection`)
+
+| Rama | allow_force_pushes | allow_deletions | enforce_admins | Revisión de PR | Checks requeridos |
+|---|---|---|---|---|---|
+| main | false | false | true | sí | `secrets` |
+| staging | false | false | true | sí | `secrets` |
+
+## Evasiones conocidas (reproducidas contra el hook final: exit 0)
+
+Intento 2, Claude: `git push origin "a&b" -f`, `git push "https://host/repo.git?a=1&b=2" -f`, `git push origin "a;b" -d rama`, `git push origin a\&b -f`.
+Intento 2, Codex: `git>/dev/null push -f origin feat/x`, `git>/dev/null branch -d rama`, `git push -\<LF>f`, `git branch -\<LF>d rama`, `git push -{u,f}`, `git branch -{r,d} origin/rama`, `FORCE=+HEAD:refs/heads/feat/x git --config-env=remote.origin.push=FORCE push origin` y su forma separada `git --config-env remote.origin.push=FORCE push origin`.
+Declaradas fuera de alcance en el plan: `V=--force; git push origin feat/x $V`, `git config remote.origin.push +refs/heads/*:refs/heads/*`, `git config alias.pf "push --force"`.
+Encontradas por el CTO y los verificadores tras HUMAN (variantes de "flags en variables o sustitución"): `git push origin $'\x2df' feat/x`, `git push origin feat/x $(printf '\x2df')`.
+Los 5 hallazgos reproducibles del intento 1 (`--for"ce"`, `git >/dev/null push -f`, `--m`, `git branch '-d'`, `\r` final) salen con exit 2, y awk roto con salida 0, 1 o 2 bloquea en la suite.
 
 ## Archivos
 
@@ -11,8 +28,8 @@
 - `scripts/test-hooks.sh` (nuevo): alimenta los 5 hooks con JSON y verifica el código de salida.
 - `.claude/commands/audit-codex.md`: `codex exec` con `-m gpt-5.6-terra -c model_reasoning_effort='"ultra"'` (pedido de Leonardo).
 - `CLAUDE.md`: fila "Segundo auditor" de la tabla de roles anota `gpt-5.6-terra` con esfuerzo `ultra` (pedido de Leonardo).
-- `LESSONS.md`: lección del intento 1 (comillas a mitad de palabra y salida del analizador).
-- `.pipeline/criterios-hook-force-push.md`, `.pipeline/evidencia/hook-force-push.md`, `.pipeline/test-hooks-salida.txt` (salida literal de la última corrida), veredictos del intento 1.
+- `LESSONS.md`: 4 lecciones (comillas y salida del analizador; criterios verificables antes del PASS; separadores dentro de comillas según el modelo de amenaza; modelo de amenaza en criterios de seguridad).
+- `.pipeline/criterios-hook-force-push.md`, `.pipeline/evidencia/hook-force-push.md`, `.pipeline/test-hooks-salida.txt` (salida literal de la última corrida), veredictos de los intentos 1 (`*-intento1.json`) y 2.
 - Sin cambios: `.claude/agents/engineer.md` (`git diff origin/staging -- .claude/agents/engineer.md` vacío), `.claude/settings.json`.
 
 ## Tests
@@ -32,4 +49,4 @@
 
 ## C5 (PR contra staging)
 
-Por protocolo (CLAUDE.md, Fase 3 paso 7), el PR se abre solo cuando JEV devuelve `PASS`, es decir, después de esta auditoría. C5 no puede tener evidencia dentro del diff: se verifica con el PR abierto (base `staging`, salida de `scripts/test-hooks.sh` en la descripción) y Leonardo es quien mergea.
+Por protocolo (CLAUDE.md, Fase 3 paso 7), el PR se abre cuando JEV devuelve `PASS`. En esta tarea JEV devolvió HUMAN y el PR se abre por decisión de Leonardo, sin intento 3. C5 no puede tener evidencia dentro del diff: se verifica con el PR abierto (base `staging`, salida de `scripts/test-hooks.sh` en la descripción, sin mergear) y el resultado queda en un comentario del PR.

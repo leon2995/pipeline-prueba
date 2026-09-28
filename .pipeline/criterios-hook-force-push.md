@@ -2,7 +2,8 @@
 
 Riesgo: medio. Toca el control de seguridad del pipeline (`.claude/hooks/guard-commands.sh`); un error deja pasar comandos destructivos o bloquea trabajo legítimo. Sin datos ni integraciones.
 
-- **C1.** `guard-commands.sh` bloquea (exit 2) cualquier push forzado, sin importar la posición del flag: `--force`, `--force-with-lease`, `-f` solo o combinado con otros flags cortos (como `-uf`) y refspecs con `+` (`git push origin +rama`).
+- **C1.** El hook bloquea el push forzado y el borrado de ramas escritos de forma directa o con sintaxis de shell común. La ofuscación deliberada queda fuera de su alcance; el control efectivo sobre main y staging es la protección de ramas de GitHub.
+  *Cambio de Leonardo tras HUMAN en el intento 2.* Redacción original, a la que remite C4 con "los 4 casos de push forzado": "`guard-commands.sh` bloquea (exit 2) cualquier push forzado, sin importar la posición del flag: `--force`, `--force-with-lease`, `-f` solo o combinado con otros flags cortos (como `-uf`) y refspecs con `+` (`git push origin +rama`)."
 - **C2.** `git branch -d` sigue bloqueado a propósito (además de `-D`): borrar ramas siempre requiere OK de Leonardo. El hook tiene un comentario que lo dice.
 - **C3.** El hook duplicado del engineer (`guard-commands.sh` en el frontmatter de `.claude/agents/engineer.md`) se conserva sin cambios: es redundancia intencional.
 - **C4.** `scripts/test-hooks.sh` alimenta cada hook con JSON de prueba y verifica el código de salida. Mínimo:
@@ -10,7 +11,7 @@ Riesgo: medio. Toca el control de seguridad del pipeline (`.claude/hooks/guard-c
   - permitidos (exit 0): `git status`, `npm test`, `git push -u origin feat/x`, `git push --follow-tags origin feat/x`.
   El script termina con código distinto de 0 si algún caso falla.
 - **C5.** Rama `fix/hook-force-push`, PR contra `staging` con la salida de `scripts/test-hooks.sh` en la descripción. No se mergea sin OK de Leonardo.
-  *Verificación (anotada con OK de Leonardo):* C5 se verifica con el PR abierto, después de que JEV devuelva PASS; por protocolo no puede tener evidencia dentro del diff auditado. El criterio no cambia.
+  *Verificación (anotada con OK de Leonardo):* C5 se verifica con el PR abierto, después de que JEV devuelva PASS; por protocolo no puede tener evidencia dentro del diff auditado. El criterio no cambia. En esta tarea JEV devolvió HUMAN (tope de intentos) y Leonardo decidió abrir el PR con las evasiones conocidas documentadas, sin intento 3.
 
 ## Plan
 
