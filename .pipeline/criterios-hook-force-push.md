@@ -24,8 +24,20 @@ Riesgo: medio. Toca el control de seguridad del pipeline (`.claude/hooks/guard-c
 5. Por pedido explícito de Leonardo (agregado después de la auditoría del plan): fijar el modelo del segundo auditor en `.claude/commands/audit-codex.md` con exactamente `-m gpt-5.6-terra -c model_reasoning_effort='"ultra"'` en el `codex exec`, y anotarlo en la fila "Segundo auditor" de la tabla de roles de `CLAUDE.md`.
 6. Correr el script, verificar que contra el hook de `staging` falla (prueba de que los tests detectan la regresión), guardar evidencia, auditor Claude y Codex, JEV, PR contra `staging`. Sin merge.
 
+### Intento 2 (JEV devolvió FIX en el intento 1)
+
+Los dos auditores encontraron evasiones reales porque el hook no normalizaba lo que bash sí normaliza. Cambios:
+
+7. Un solo analizador awk (`analizar_git`) para push forzado, push a `main` y borrado de ramas; imprime una palabra (`force`, `main`, `borrado`, `limpio`) y el hook decide por esa salida, no por el código de salida de awk. Cualquier otra salida (awk ausente, caído o que sale con 0, 1 o 2 sin imprimir) bloquea los comandos que mencionan `push` o `branch`.
+8. Normalización antes de comparar: quita redirecciones (`2>&1`, `&>`, `>|`, `> archivo`, `>archivo`) antes de partir por `&`; en cada palabra quita comillas, `\`, `$`, `(`, `)`, `{`, `}` en cualquier posición (`--for"ce"`, `-"f"`, `p\ush`, `$'-f'`, `'-d'`). Reconoce `git` también como ruta Windows (`...\git.exe`).
+9. Abreviaturas: bloquea cualquier prefijo de `--force-with-lease`, `--force-if-includes` y `--mirror` desde tres caracteres (`--f`, `--m`); los prefijos ambiguos igual fallan en git, así que bloquearlos no cuesta nada. `--fol` (follow-tags) y `--dry-run` pasan.
+10. Push a `main` pasa al analizador (antes era grep y se evadía con `'main'`): `main`, `HEAD:main`, `HEAD:refs/heads/main`. Deja de bloquear por error `git push origin x && git checkout main`.
+11. Borrado de ramas, por el motivo de C2 ("borrar ramas siempre requiere mi OK"): además de `git branch`, cubre ramas remotas (`git push --delete`, `-d`, `:rama`) y `git update-ref -d`.
+12. Config de git por variables de entorno (`GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_KEY_n`/`VALUE_n`) con `push=+` o `mirror`, igual que `-c`.
+13. Tests nuevos para cada evasión reportada, `\r` final (CRLF de jq en Windows) y awk roto con salida 0, 1 y 2.
+
 **`.claude/agents/engineer.md` no se toca (C3):** el `guard-commands.sh` duplicado en su frontmatter se conserva sin cambios.
 
 **`settings.json` no se toca.** Sus globs `Bash(git push --force*)` y `Bash(git push -f*)` son una primera capa gruesa con el mismo hueco que el regex viejo; `guard-commands.sh` es la fuente de verdad para push forzado y corre en la sesión principal y en todos los subagentes. Cambiar `settings.json` no está en los criterios de Leonardo.
 
-Fuera de alcance (se reporta, no se implementa): borrado de ramas remotas vía `git push --delete`/`:rama`, aliases de git, config persistente (`git config remote.*.push +...`), sustitución de variables o comandos que oculten el flag en tiempo de ejecución (`V=--force; git push origin feat/x $V`), hooks de archivos con rutas Windows (`\`).
+Fuera de alcance (se reporta, no se implementa): aliases de git, config persistente (`git config remote.*.push +...`), sustitución de variables o comandos que oculten el flag en tiempo de ejecución (`V=--force; git push origin feat/x $V`), hooks de archivos con rutas Windows (`\`).

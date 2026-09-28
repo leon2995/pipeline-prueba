@@ -62,15 +62,49 @@ g bloquea 'bash -c "git push -f origin feat/x"'
 g bloquea 'git push origin feat/x \
   --force'
 
+echo "== guard-commands.sh: push forzado escondido con comillas, escapes, redirecciones o abreviaturas (bloquea)"
+g bloquea 'git push origin --for"ce" feature-x'
+g bloquea 'git push -"f" origin feat/x'
+g bloquea "git push --forc'e' origin feat/x"
+g bloquea 'git p\ush -f origin feat/x'
+g bloquea '"git" push -f origin feat/x'
+g bloquea 'git >/dev/null push -f origin feat/x'
+g bloquea 'git > /dev/null push -f origin feat/x'
+g bloquea 'git 2>&1 push -f origin feat/x'
+g bloquea 'git push -f origin feat/x &>/dev/null'
+g bloquea 'git push --m origin'
+g bloquea 'git push --force-w origin feat/x'
+g bloquea 'git push --forc origin feat/x'
+g bloquea '"C:\Program Files\Git\bin\git.exe" push -f origin feat/x'
+g bloquea "git push origin \$'-f' feat/x"
+g bloquea "GIT_CONFIG_PARAMETERS=\"'remote.origin.push=+refs/heads/*:refs/heads/*'\" git push origin"
+g bloquea 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git push origin'
+# \r final: jq nativo de Windows entrega el comando con CRLF.
+caso guard-commands.sh bloquea '{"tool_name":"Bash","tool_input":{"command":"git push -f origin feat/x\r"}}' 'git push -f origin feat/x + \r final'
+
 echo "== guard-commands.sh: borrado de ramas (bloquea)"
 g bloquea 'git branch -D rama-que-no-existe'
 g bloquea 'git branch -d rama-que-no-existe'
 g bloquea 'git branch --delete rama-que-no-existe'
 g bloquea 'git branch -rd origin/rama'
 g bloquea 'git branch -rD origin/rama'
+g bloquea "git branch '-d' rama"
+g bloquea 'git branch "-D" rama'
+g bloquea 'git branch -\D rama'
+g bloquea 'git branch --del rama'
+g bloquea 'git -C . branch -d rama'
+g bloquea 'git >/dev/null branch -d rama'
+g bloquea 'git push origin --delete feat/x'
+g bloquea 'git push origin -d feat/x'
+g bloquea 'git push origin :feat/x'
+g bloquea 'git update-ref -d refs/heads/feat/x'
 
 echo "== guard-commands.sh: main y merge (bloquea)"
 g bloquea 'git push origin main'
+g bloquea "git push origin 'main'"
+g bloquea 'git push origin HEAD:main'
+g bloquea 'git push origin HEAD:refs/heads/main'
+g bloquea 'git push -u origin main 2>&1'
 g bloquea 'gh pr merge 1 --squash --admin'
 
 echo "== guard-commands.sh: permitidos"
@@ -86,17 +120,30 @@ g permite 'git stash push -m wip'
 g permite 'git branch --merged'
 g permite 'git branch -m viejo nuevo'
 g permite 'git branch fix-db-deploy'
+g permite 'git branch --sort=-committerdate'
+g permite 'git push --fol origin feat/x'
+g permite 'git push origin feat/x 2>&1 | tail -5'
+g permite 'git push origin feat/main-fix'
+g permite 'git push origin main:feat/x'
+g permite 'git push origin feat/x && git checkout main'
+g permite 'git checkout main'
+g permite 'git push --dry-run origin feat/x'
+g permite 'GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x'
 
 echo "== guard-commands.sh: falso positivo aceptado (no respeta comillas, para ver dentro de bash -c)"
 g bloquea 'git commit -m "revertir el git push --force de ayer"'
 
-echo "== guard-commands.sh: awk roto (fail-closed solo si el comando menciona push)"
-mkdir -p "$tmp/awk-roto"
-printf '#!/bin/sh\nexit 2\n' > "$tmp/awk-roto/awk"
-chmod +x "$tmp/awk-roto/awk"
-extra_path="$tmp/awk-roto:"
-g bloquea 'git push -u origin feat/x'
-g permite 'git status'
+echo "== guard-commands.sh: awk roto (fail-closed solo si el comando menciona push o branch)"
+for codigo in 0 1 2; do
+  mkdir -p "$tmp/awk-$codigo"
+  printf '#!/bin/sh\nexit %s\n' "$codigo" > "$tmp/awk-$codigo/awk"
+  chmod +x "$tmp/awk-$codigo/awk"
+  extra_path="$tmp/awk-$codigo:"
+  echo "-- awk sale con $codigo sin imprimir nada"
+  g bloquea 'git push -u origin feat/x'
+  g bloquea 'git branch -d rama'
+  g permite 'git status'
+done
 extra_path=""
 
 echo "== readonly-guard.sh (auditor)"
