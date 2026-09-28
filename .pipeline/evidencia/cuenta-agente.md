@@ -1,6 +1,7 @@
 # Evidencia: cuenta-agente (T1)
 
-- **Estado:** listo para auditoría de código.
+- **Estado:** intento 2, listo para auditoría de código.
+- **Intento 1:** JEV HUMAN (auditores en desacuerdo): Claude `pass` (1 media: comando de verificación del helper en `SETUP.md`; 5 bajas) y Codex `fail` (3 altas: `--help` en otro segmento borraba una escritura, flags globales de `gh` antes del subcomando, `-X` repetido; 1 media: C2 por texto y chequeos de la plantilla omitidos sin jq). Veredictos en `.pipeline/veredicto-cuenta-agente-intento1.json` y `.pipeline/veredicto-codex-cuenta-agente-intento1.json`. Leonardo pidió el intento 2 corrigiendo todo, con una regla preaprobada: si al final solo quedan evasiones del analizador por sintaxis de shell, se documentan como límites conocidos y se abre el PR sin escalar.
 - **Rama:** `feat/cuenta-agente` (desde `staging` en `813afe4`, con el PR #4).
 - **Implementó:** CTO (sesión principal), pruebas e implementación, por la regla de rutas de gobierno (excepción aprobada por Leonardo y hecha regla permanente en `CLAUDE.md`).
 - **Riesgo:** alto. Plan auditado en dos vueltas (las dos `fail`); Leonardo decidió y aprobó el plan final: token con `--insecure-storage` en `~/.talos-gh`, PowerShell denegada, regla permanente y orden a, b, d, e, c, f, g.
@@ -11,6 +12,8 @@
 1. `51c37a1` test(cuenta-agente): pruebas primero. Contra los hooks de entonces: `263 ok, 84 fallos`, todos en las secciones nuevas (y el caso `GIT_CONFIG_NOSYSTEM=1 git push`, que cambió de permite a bloquea).
 2. `b86d651` feat(cuenta-agente): implementación. Suite: `347 ok, 0 fallos`.
 3. `9654ec4` ci(cuenta-agente): paso con mawk (ver C2).
+4. `8116da7` evidencia del intento 1.
+5. `3cc394f` fix(cuenta-agente): intento 2. Suite: `380 ok, 0 fallos`. Casos nuevos para cada hallazgo del intento 1: `gh pr create ...; gh pr view --help`, `gh pr new`, `gh -R ... pr create`, `gh pr -R ... edit`, `gh pr edit|close|reopen|ready`, `gh pr review --comment` sin identidad; `gh api -X GET -X DELETE`, `-X DELETE -X GET`, `-X "POST"`, `-X GET a; -X DELETE b` y `gh --repo ... api -f`; `gh pr -R ... review --approve` y `gh -R ... pr review -a`; `gh --hostname ... auth token` y `gh auth --hostname ... status -t`; `env -i` y `env -` (identidad), `env -u FOO`, `env LANG=C` y `printenv -0` (credenciales); y `env LANG=C sort`, `env -u FOO python x.py`, `printenv PATH`, `gh api -XGET` y `--method=GET` permitidos.
 
 ## Criterios
 
@@ -24,6 +27,7 @@
 
 ## Tests
 
-- `bash scripts/test-hooks.sh` en Windows (Git Bash, gawk): `347 ok, 0 fallos`. Salida completa en `.pipeline/test-hooks-salida.txt`.
+- Intento 2: `bash scripts/test-hooks.sh` en Windows (Git Bash, gawk): `380 ok, 0 fallos`. Salida completa en `.pipeline/test-hooks-salida.txt`. CI del push de `3cc394f`: https://github.com/leon2995/pipeline-prueba/actions/runs/36451070063 → `hooks: success`, `380 ok, 0 fallos` con GNU Awk 5.2.1 y `380 ok, 0 fallos` con mawk 1.3.4 20240123. Mutación del intento 2 contra los archivos de `staging`: `264 ok, 116 fallos`, exit 1, todos en secciones nuevas (30 de credenciales, 14 de cambio de identidad, 5 de aprobación, 5 de permitidos nuevos que los patrones viejos bloqueaban: los dos `--help`, `printenv PATH`, `env LANG=C sort` y `env -u FOO python x.py`; 31 de C4, 2 de reglas con barra interna, 2 de CODEOWNERS, 26 de configuración y 1 por `GIT_CONFIG_NOSYSTEM`).
+- Intento 1: `bash scripts/test-hooks.sh` en Windows (Git Bash, gawk): `347 ok, 0 fallos`.
 - CI en Linux: `347 ok, 0 fallos` con gawk (corridas 36437206116 y 36437391390) y con mawk (36437391390).
 - Mutación: la suite de la rama contra los archivos de `staging` (hooks, reglas, `settings.json`, `.gitignore`, CI, sin CODEOWNERS ni plantilla) → `259 ok, 88 fallos`, exit 1, todos en secciones nuevas: 25 de credenciales, 12 de cambio de identidad, 3 de aprobación, 2 de permitidos nuevos (`gh pr merge --help`), 16 de C4, 2 de reglas con barra interna, 2 de CODEOWNERS, 25 de configuración y 1 por el caso `GIT_CONFIG_NOSYSTEM` que pasó a bloquea.
