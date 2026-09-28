@@ -1,6 +1,10 @@
 # Evidencia: audit-codex-stdin
 
-- **Estado:** listo para auditoría de código.
+- **Estado:** auditor Claude `pass` (1 media, 1 baja); JEV `PASS` en el intento 1 (`.pipeline/veredicto-audit-codex-stdin.json`).
+- **Después del PASS:**
+  - Hallazgo medio atendido: la fila del CTO en `CLAUDE.md` citaba `.claude/settings.json` como fuente de "esfuerzo `xhigh` y orquestación con workflows", que no están literalmente en ese archivo. Queda "Opus 5.5 (`claude-opus-5-5`) con ultracode (`"ultracode": true` en `.claude/settings.json`)", como pide C6.
+  - Hallazgo bajo pendiente, fuera de C1 a C7: `SETUP.md` sigue diciendo "ChatGPT Pro".
+  - La `new_lesson` del auditor no se agregó a `LESSONS.md`, porque C7 pide que queden solo las dos lecciones generales. Queda para decisión de Leonardo.
 - **Rama:** `fix/audit-codex-stdin` (desde `staging`, que ya incluye el PR #1).
 - **Implementó:** CTO (sesión principal). Todo es `.claude/`, `CLAUDE.md` o `LESSONS.md`.
 - **Riesgo:** bajo (decisión de Leonardo). Flujo: auditor Claude y JEV.

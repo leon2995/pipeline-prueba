@@ -6,7 +6,7 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 
 | Rol | Quién | Qué ve | Modelo y esfuerzo |
 |---|---|---|---|
-| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`) con ultracode: esfuerzo `xhigh` y orquestación con workflows (`.claude/settings.json`) |
+| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`) con ultracode (`"ultracode": true` en `.claude/settings.json`) |
 | test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan | Sonnet (`sonnet`), esfuerzo alto (`effort: high`) |
 | engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md | Hereda modelo y esfuerzo de la sesión (`model: inherit`, sin `effort`) |
 | auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md | Opus 5.5 (`claude-opus-5-5`), esfuerzo alto (`effort: high`) |
