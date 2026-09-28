@@ -80,7 +80,7 @@ ok     permite  git push origin main:feat/x
 ok     permite  git push origin feat/x && git checkout main
 ok     permite  git checkout main
 ok     permite  git push --dry-run origin feat/x
-ok     permite  GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x
+ok     bloquea  GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x
 == guard-commands.sh: falso positivo aceptado (no respeta comillas, para ver dentro de bash -c)
 ok     bloquea  git commit -m "revertir el git push --force de ayer"
 == guard-commands.sh: awk roto (fail-closed solo si el comando menciona push o branch)
@@ -201,6 +201,190 @@ ok     permite  gh pr merge 101 --squash
 ok     bloquea  gh pr merge 102 --squash
 -- no-soportada
 ok     bloquea  gh pr merge 101 --squash
+-- barra-interna-dir
+ok     bloquea  gh pr merge 101 --squash
+-- barra-interna-archivo
+ok     bloquea  gh pr merge 101 --squash
+== guard-commands.sh: credenciales (bloquea)
+ok     bloquea  grep -rn GH_TOKEN .
+ok     bloquea  echo "$GH_TOKEN"
+ok     bloquea  echo ${GITHUB_TOKEN}
+ok     bloquea  echo ghp_
+ok     bloquea  echo github_pat_
+ok     bloquea  cat .claude/settings.local.json
+ok     bloquea  grep -rn helper .claude/settings.local.json
+ok     bloquea  cat ~/.talos-gh/hosts.yml
+ok     bloquea  ls ~/.talos-gh
+ok     bloquea  gh auth token
+ok     bloquea  gh auth status -t
+ok     bloquea  gh auth status --show-token
+ok     bloquea  gh auth git-credential get
+ok     bloquea  git credential fill < /dev/null
+ok     bloquea  git credential approve
+ok     bloquea  env
+ok     bloquea  ls && env
+ok     bloquea  env | sort
+ok     bloquea  printenv
+ok     bloquea  set
+ok     bloquea  export
+ok     bloquea  export -p
+ok     bloquea  declare -p
+ok     bloquea  declare -x
+ok     bloquea  typeset
+ok     bloquea  printenv -0
+ok     bloquea  env -u FOO
+ok     bloquea  env LANG=C
+ok     bloquea  gh --hostname github.com auth token
+ok     bloquea  gh auth --hostname github.com status -t
+ok     bloquea  gh config get -h github.com oauth_token
+== guard-commands.sh: cambio de identidad (bloquea)
+ok     bloquea  gh auth login
+ok     bloquea  gh auth logout
+ok     bloquea  gh auth switch -u leon2995
+ok     bloquea  gh auth refresh -s workflow
+ok     bloquea  gh auth setup-git
+ok     bloquea  GH_CONFIG_DIR= gh pr list
+ok     bloquea  unset GH_CONFIG_DIR
+ok     bloquea  export GIT_CONFIG_COUNT=0
+ok     bloquea  GIT_CONFIG_PARAMETERS=x git push origin feat/x
+ok     bloquea  git -c credential.helper= push origin feat/x
+ok     bloquea  git config --global credential.helper manager
+ok     bloquea  git config credential.https://github.com.helper x
+ok     bloquea  env -i bash
+ok     bloquea  env - git push -u origin feat/x
+== guard-commands.sh: aprobación de PRs (bloquea)
+ok     bloquea  gh pr review 5 --approve
+ok     bloquea  gh pr review 5 -a
+ok     bloquea  gh pr review 5 -a -b ok
+ok     bloquea  gh pr -R leon2995/pipeline-prueba review 5 --approve
+ok     bloquea  gh -R leon2995/pipeline-prueba pr review 5 -a
+== guard-commands.sh: credenciales e identidad (permitidos)
+ok     permite  gh auth status
+ok     permite  gh pr review 5 --comment -b "ok"
+ok     permite  gh pr review 5 -r -b "faltan pruebas"
+ok     permite  gh pr merge --help
+ok     permite  gh pr merge 101 --help
+ok     permite  git add .claude/settings.local.example.json
+ok     permite  set -e
+ok     permite  export FOO=1
+ok     permite  declare -a lista
+ok     permite  git config --get user.name
+ok     permite  env LANG=C sort
+ok     permite  env -u FOO python x.py
+ok     permite  printenv PATH
+ok     permite  printenv -0 PATH
+ok     permite  env LC_ALL=C sed -i s/a/b/ f
+ok     permite  env LANG=C sort -
+== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
+-- identidad
+-- sin la identidad de talos-bot
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  gh pr create --title x --body y
+ok     bloquea  gh pr merge 101 --squash
+ok     bloquea  gh pr comment 101 --body x
+ok     bloquea  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
+ok     bloquea  gh api graphql -f query=x
+ok     bloquea  gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json
+ok     bloquea  gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh pr create --title x --body y; gh pr view --help
+ok     bloquea  gh pr new --fill
+ok     bloquea  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     bloquea  gh pr -R leon2995/pipeline-prueba edit 5 --title x
+ok     bloquea  gh pr edit 5 --title x
+ok     bloquea  gh pr close 5
+ok     bloquea  gh pr reopen 5
+ok     bloquea  gh pr ready 5
+ok     bloquea  gh pr review 5 --comment -b x
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET
+ok     bloquea  gh api -X "POST" repos/{owner}/{repo}/issues/5/comments
+ok     bloquea  gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x
+ok     bloquea  git -C . push -u origin feat/x
+ok     permite  gh api -XGET repos/{owner}/{repo}/pulls/5
+ok     permite  gh api --method=GET repos/{owner}/{repo}/pulls/5
+ok     permite  git status
+ok     permite  git log --oneline -3
+ok     permite  gh pr view 101
+ok     permite  gh api repos/{owner}/{repo}/pulls/5
+ok     permite  gh api -X GET repos/{owner}/{repo}/pulls/5
+ok     permite  gh pr merge --help
+ok     bloquea  gh pr create --title "T3: soporte de --help" --body-file b.md
+ok     bloquea  gh pr comment 5 --body 'usa -h para ver opciones'
+-- con la identidad de talos-bot
+ok     permite  git commit -m x
+ok     permite  git push -u origin feat/x
+ok     permite  gh pr create --title x --body y
+ok     permite  gh pr merge 101 --squash
+ok     permite  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
+ok     permite  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     permite  git push https://github.com/leon2995/pipeline-prueba.git feat/x
+ok     bloquea  gh pr merge 102 --squash
+ok     bloquea  git push -u remoto-inexistente feat/x
+ok     bloquea  git push git@github.com:leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push --repo=origin feat/x
+-- identidad incompleta o de otra cuenta
+ok     bloquea  git commit -m x
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  gh pr create --title x --body y
+ok     permite  git commit -m x
+-- identidad-vacia
+ok     bloquea  git commit -m x
+-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot
+ok     permite  git commit -m x
+ok     permite  git push -u origin feat/x
+== CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)
+ok     pasa     el CODEOWNERS del repo coincide con rutas-gobierno.txt
+ok     falla    CODEOWNERS al que le falta una regla
+ok     falla    CODEOWNERS con una regla de más
+ok     falla    CODEOWNERS con otro dueño
+ok     falla    CODEOWNERS con dos dueños
+ok     falla    CODEOWNERS con .claude/ anclado a la raíz
+ok     pasa     CODEOWNERS con CRLF
+ok     falla    CODEOWNERS vacío
+ok     falla    CODEOWNERS ausente
+ok     falla    regla **/X/ con barra interna
+ok     falla    regla **/X con barra interna
+ok     falla    rutas-gobierno.txt sin reglas
+== configuración: settings.json, .gitignore, plantilla y CI (C2, C5)
+ok     pasa     settings.json deniega PowerShell
+ok     pasa     settings.json deniega Read(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Read(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Edit(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Edit(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Write(./.claude/settings.local.json)
+ok     pasa     settings.json deniega Write(**/.claude/settings.local.json)
+ok     pasa     settings.json deniega Read(~/.talos-gh/**)
+ok     pasa     settings.json deniega Edit(~/.talos-gh/**)
+ok     pasa     settings.json deniega Write(~/.talos-gh/**)
+ok     pasa     .gitignore ignora .claude/settings.local.json
+ok     pasa     jq está instalado (requerido por los chequeos de la plantilla)
+ok     pasa     la plantilla es JSON válido
+ok     pasa     la plantilla apunta GH_CONFIG_DIR a ~/.talos-gh
+ok     pasa     la plantilla fija GIT_CONFIG_COUNT en 2
+ok     pasa     la plantilla fija GIT_CONFIG_KEY_0
+ok     pasa     la plantilla vacía el helper con GIT_CONFIG_VALUE_0
+ok     pasa     la plantilla fija GIT_CONFIG_KEY_1
+ok     pasa     la plantilla usa gh como helper en GIT_CONFIG_VALUE_1
+ok     pasa     la plantilla fija el autor talos-bot
+ok     pasa     la plantilla fija el committer talos-bot
+ok     pasa     la plantilla usa el email noreply del autor
+ok     pasa     la plantilla usa el email noreply del committer
+ok     falla    la plantilla no trae prefijos de token
+ok     pasa     el job hooks corre en ubuntu-latest
+ok     pasa     el job hooks corre la suite
+ok     pasa     el job hooks corre la suite con mawk
+ok     pasa     el job hooks instala mawk si falta (no lo omite)
+ok     pasa     CI corre en pull_request
+ok     pasa     CI corre en push a feat/** y fix/** (bajo push:)
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -252,4 +436,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-226 ok, 0 fallos
+395 ok, 0 fallos

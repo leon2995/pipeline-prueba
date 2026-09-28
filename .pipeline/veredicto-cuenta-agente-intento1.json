@@ -1,0 +1,45 @@
+{
+  "task": "cuenta-agente",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "SETUP.md",
+      "detail": "La verificación del helper en el paso f anuncia una salida que nunca va a aparecer: `git config --show-origin --get-all credential.helper` solo lee la clave exacta `credential.helper`, y la plantilla define `credential.https://github.com.helper` (otra clave). Leonardo verá solo el manager del sistema. El comando lo pide C7 al pie de la letra.",
+      "fix": "Usar `git config --show-origin --get-regexp '^credential\\..*helper$'` o `git config --get-urlmatch credential.helper https://github.com` y ajustar la salida esperada (C7 con OK de Leonardo)."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "`env\\ *` y `printenv\\ *` bloquean con cualquier argumento: `env LANG=C sort`, `env -u FOO python x.py`, `printenv PATH`. C3 dice sin argumentos.",
+      "fix": "Bloquear env/printenv solo sin comando; agregar `env LANG=C sort` y `printenv PATH` como permitidos."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "La búsqueda por nombre revisa todo el texto del comando, también cuerpos de PR y mensajes inline: un `gh pr create --body` que mencione GH_CONFIG_DIR o settings.local.json, o `git commit -m \"docs: config del credential helper\"`, quedan bloqueados.",
+      "fix": "Indicar en CLAUDE.md que los cuerpos de PR y los mensajes largos van por --body-file / git commit -F escritos con Write."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Huecos de detección de escrituras en C4: `gh pr new` (alias de create); `-X \"POST\"` entre comillas; `gh pr create --fill; gh pr view --help` (la excepción de --help mira todo el comando); `gh api -X GET a; gh api -X DELETE b`.",
+      "fix": "Agregar `new`, aceptar comillas en el método y aplicar las excepciones de --help y GET por segmento, con casos."
+    },
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh",
+      "detail": "C4 prueba create, merge y comment, pero no gh pr review|edit|close|reopen|ready.",
+      "fix": "Agregar casos bloqueados sin identidad para edit, close, ready y review --comment."
+    },
+    {
+      "severity": "baja",
+      "file": ".github/workflows/ci.yml",
+      "detail": "El paso de mawk termina en verde con 'se omite' si la imagen deja de traer mawk. C2 se editó después de la aprobación (9654ec4), declarado.",
+      "fix": "Instalar mawk si falta en lugar de omitir, y registrar la corrección de C2 en el PR."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [cuenta-agente] docs de verificación: cuando se documenta un comando de verificación con su salida esperada, confirmar que lee la misma clave que se configuró (credential.<url>.helper no aparece en `git config --get-all credential.helper`); usar --get-regexp o --get-urlmatch."
+}

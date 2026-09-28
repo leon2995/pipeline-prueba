@@ -47,7 +47,17 @@
       "Bash(railway delete*)",
       "Bash(railway down*)",
       "Bash(railway environment delete*)",
-      "Bash(railway service delete*)"
+      "Bash(railway service delete*)",
+      "PowerShell",
+      "Read(./.claude/settings.local.json)",
+      "Read(**/.claude/settings.local.json)",
+      "Edit(./.claude/settings.local.json)",
+      "Edit(**/.claude/settings.local.json)",
+      "Write(./.claude/settings.local.json)",
+      "Write(**/.claude/settings.local.json)",
+      "Read(~/.talos-gh/**)",
+      "Edit(~/.talos-gh/**)",
+      "Write(~/.talos-gh/**)"
     ]
   },
   "hooks": {

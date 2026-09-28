@@ -1,0 +1,101 @@
+{
+  "task": "cuenta-agente",
+  "mode": "code",
+  "verdict": "fail",
+  "lentes": {
+    "analizador-suite": "pass",
+    "token-proteccion-codeowners": "fail"
+  },
+  "findings": [
+    {
+      "severity": "alta",
+      "categoria": "token",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "Paso c (línea 95 y bloque de las líneas 97 a 102): pide un token classic con solo `public_repo` y `workflow` y lo pega en `gh auth login ... --insecure-storage` (\"Paste an authentication token\"). gh valida los scopes mínimos de un token pegado (shared.HasMinimumScopes: `repo` y `read:org`; con https además sugiere `workflow`) y rechaza el login con `error validating token: missing required scopes 'repo', 'read:org'`. `public_repo` no cuenta como `repo`. El paso c falla tal como está escrito, así que talos-bot no se puede conectar con el flujo documentado. Además, quien lo destrabe en el momento tiene que decidir sobre la marcha los scopes de la credencial en una tarea de riesgo alto. C7 fija `public_repo` y `workflow` al pie de la letra, así que el criterio mismo trae el error y SETUP.md no cumple lo que C7 busca (\"explica cómo crear y conectar talos-bot\"). No se puede verificar antes del PASS ejecutándolo, pero sí leyendo el comportamiento de gh.",
+      "fix": "Con OK de Leonardo, corregir C7 y SETUP.md: token classic con `repo`, `read:org` y `workflow` (el mínimo que acepta `gh auth login`), y explicar que `repo` solo alcanza los repos donde talos-bot es colaboradora. Otra opción es declarar otro método de login que no valide scopes, con su riesgo. Indicar la salida esperada del login.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "categoria": "evasion_analizador_shell",
+      "detail": "C4, línea 222: la excepción de ayuda (`grep -Eq ' (--help|-h)( |$)'`) mira el segmento entero, también el texto entre comillas. Un `--help` o `-h` que aparece dentro de un título o un cuerpo, seguido de un espacio, hace `continue` antes de clasificar la escritura. Con `.claude/identidad-agente.txt` activo y sin la identidad de talos-bot, estos comandos pasan: `gh pr create --title \"T3: jev.py --help en español\" --body-file b.md` y `gh pr comment 5 --body \"usa gh pr merge --help para ver flags\"`. El primero crea el PR y el segundo publica el comentario, los dos como leon2995 (en el segundo el bloque de merge además sale con 0 por el `--help`). En este repo es plausible: los veredictos que se comentan en el PR citan `--help`. CLAUDE.md:130 manda por archivo el cuerpo de `gh pr create` y los commits, pero no los `--title` ni `gh pr comment --body`. Los tres altos de Codex del intento 1 sí quedan corregidos. Help por segmento: líneas 214-237, caso en la línea 455. Flags globales: patrón F en las líneas 41, 46, 79, 82, 217, 223 y 225, casos 392-393, 415-416, 457-458 y 468. -X repetido: líneas 232-234, casos 464-467. La media de Codex (C2 por estructura y jq obligatorio) queda corregida en test-hooks.sh:596 y 616-630. La media de Claude (SETUP) queda corregida en SETUP.md:111 y 115.",
+      "fix": "Aplicar la excepción de ayuda solo si `--help` o `-h` es un token fuera de comillas de la invocación de gh. Se puede reutilizar `cortar` y `xargs -n1` como en el bloque de merge, o por lo menos quitar el texto entre comillas antes del grep. Agregar el caso bloquea `gh pr create --title \"a --help b\" --body y` sin identidad. Si se decide no perseguirlo, documentarlo como límite conocido junto a la sección C4 del hook y en el PR (regla preaprobada) y extender CLAUDE.md:130 a `gh pr comment --body-file` y a títulos sin flags.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "media",
+      "categoria": "token",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "La verificación del helper del paso f (líneas 110 a 116) no puede dar la salida esperada en ninguno de los dos lugares donde se puede correr. La sección 4b (línea 60) pide correr todo \"en tu terminal, no a través del agente\", pero ahí GIT_CONFIG_COUNT/KEY/VALUE no existen porque solo las define el `env` de settings.local.json dentro de la sesión de Claude Code. Leonardo verá solo `credential.helper manager` y `--get-urlmatch` devolverá `manager`, no `!gh auth git-credential`. Si lo corre el agente, el hook lo bloquea: la regla de la línea 79 de guard-commands.sh (`config [^;&|]*credential`) atrapa `git config --show-origin --get-regexp '^credential\\..*helper$'` (el caso de la línea 407 de test-hooks.sh lo confirma para `git config credential...`). Es el mismo tipo de hallazgo media del intento 1: el comando cambió, pero la salida anunciada sigue sin poder verse.",
+      "fix": "Indicar que esa verificación se corre desde la sesión reiniciada con el modo `!` de Claude Code, que hereda el env y no pasa por PreToolUse, o como `git config ...` después de exportar las mismas variables en la terminal. Ajustar la salida esperada para cada caso.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "media",
+      "categoria": "evasion_analizador_shell",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/.claude/hooks/guard-commands.sh",
+      "detail": "C4, línea 222: si el segmento contiene ` --help ` o ` -h ` en cualquier parte, incluso dentro de un argumento entre comillas, se descarta como escritura. Con identidad-agente.txt presente y sin la identidad de talos-bot, `gh pr create --title \"T3: soporte de --help en el CLI\" --body-file b.md` o `gh pr comment 5 --body \"usa -h para ver opciones\"` pasan sin chequeo de identidad y escriben como la cuenta de Leonardo. Esa es la regresión silenciosa que C4 debe impedir, con texto normal de PR y no con ofuscación. El punto 8 del intento 2 exime solo a \"una invocación con --help\". La suite no tiene ese caso.",
+      "fix": "Exigir que `--help`/`-h` aparezca como token fuera de comillas, o al menos no eximir a un segmento que ya se clasificó como `gh pr create|...` con título o cuerpo. Agregar el caso `gh pr create --title \"x --help y\"` sin identidad → bloquea. Si se acepta como límite, documentarlo en el hook y en el PR según la regla preaprobada.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "categoria": "evasion_analizador_shell",
+      "detail": "El análisis parte por ; & | sin respetar comillas. Por eso un separador dentro de un valor entre comillas oculta flags posteriores. `gh pr review 5 --body \"R&D ok\" --approve` no coincide con la línea 82, porque `[^;&|]*` se corta en el `&`. `gh api repos/{owner}/{repo}/issues/5 --jq '.a | .b' -X DELETE` sin identidad pasa C4, porque el `-X DELETE` queda en un segmento sin `gh`. `bash -c \"git commit -m x\"` tampoco se detecta en C4, porque `\"` no está en I. El servidor mitiga la aprobación: el autor no puede aprobar su propio PR y talos-bot no es code owner.",
+      "fix": "Documentarlos como límites conocidos de C3/C4 en el encabezado del hook y en el PR, según la regla preaprobada, o aplicar `cortar` con respeto de comillas antes de clasificar.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "categoria": "otro",
+      "detail": "Falso positivo, línea 79: el patrón de `env -i` es `${I}env( +[^;&|]*)? +(-i|--ignore-environment|-)( |$)` y deja que el `-i` o el `-` aparezcan en cualquier punto después de `env`, también como flag del comando que env ejecuta. Se bloquea como cambio de identidad `env LC_ALL=C sed -i 's/a/b/' f`, y lo mismo `env LANG=C sort -`. Como I incluye el espacio, también cuenta una palabra `env` suelta que sea argumento seguida de `-i`. El mensaje del bloqueo es engañoso.",
+      "fix": "Aceptar `-i`, `--ignore-environment` o `-` solo entre las opciones de env, antes del primer token que no sea opción ni VAR=x (la misma lógica de `env_imprime`). Agregar el caso permite `env LC_ALL=C sed -i s/a/b/ f`.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh",
+      "categoria": "otro",
+      "detail": "Chequeo de C2, línea 630: el regex de `branches: [...'feat/**'...'fix/**'...]` se busca en todo el bloque `on:`, sin comprobar que esté bajo `push:`. Si ese filtro estuviera bajo `pull_request:`, filtraría ramas base y no pushes, y el chequeo pasaría igual. El resto de los chequeos estructurales (bloque del job `hooks` sin comentarios, runs-on, las dos corridas, instalación de mawk) sí están acotados.",
+      "fix": "Extraer el sub-bloque `push` de `on:` con `bloque_yaml` a sangría 2 y buscar `branches:` ahí.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "categoria": "token",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "La línea 104 dice que con `--insecure-storage` el login \"no toca el keyring de Windows\". El propio plan declara que en gh 2.92.0 el login de una cuenta nueva reescribe la entrada compartida del keyring: activateUser borra `gh:github.com` con usuario vacío, aunque el almacenamiento sea inseguro. La verificación posterior existe, pero la afirmación es falsa, y `gh auth login` como remedio es más pesado que `gh auth switch --hostname github.com --user leon2995`, que restaura la entrada activa desde la entrada propia de Leonardo.",
+      "fix": "Reemplazar la frase por la consecuencia declarada en el plan y proponer primero `gh auth switch` como remedio.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "baja",
+      "categoria": "proteccion_ramas",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "La sección 4 (líneas 51 y 52) sigue diciendo que main usa 0 aprobaciones porque \"los PR los abre tu cuenta\", y pide marcar `node` o `python` como checks obligatorios cuando aparezcan. El PATCH de `required_status_checks` del paso e reemplaza la lista con solo `secrets` y `hooks`, y en silencio dejaría de exigir `node` o `python` si ya estaban marcados. En este repo no hay package.json ni pyproject hoy, así que no rompe nada ahora.",
+      "fix": "Actualizar la sección 4 para remitir a 4b, y en el paso e decir que se agregan a la lista JSON los checks `node` o `python` que ya estén marcados, además de verificarlos en el GET.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "baja",
+      "categoria": "token",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/.claude/hooks/guard-commands.sh",
+      "detail": "Con `--insecure-storage`, `gh config get -h github.com oauth_token` imprime el token de talos-bot desde hosts.yml, y el hook no lo bloquea: no nombra hosts.yml, .talos-gh ni `gh auth token`. C3 no lo enumera, así que no rompe el criterio, pero es otra forma directa, sin ofuscación, de imprimir la credencial.",
+      "fix": "Agregar `oauth_token` a la lista de nombres bloqueados en la línea 43, con un caso en la suite.",
+      "lente": "token-proteccion-codeowners"
+    },
+    {
+      "severity": "baja",
+      "categoria": "token",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "El helper `credential.https://github.com.helper` solo actúa si `origin` es HTTPS. Si el clon usa SSH (`git@github.com:`), `git push` sale con la llave de Leonardo mientras el hook de C4 ve `gh api user` = talos-bot y lo deja pasar. SETUP no pide verificarlo.",
+      "fix": "En el paso f, agregar `git remote get-url origin` (debe empezar con https://github.com/ y no llevar usuario) y cómo corregirlo.",
+      "lente": "token-proteccion-codeowners"
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [cuenta-agente] hooks de comandos: una excepción por flag (--help, -X GET) se reconoce solo como token fuera de comillas; un --help dentro de un --title o --body no es una invocación con --help. | - [2026-09-28] [cuenta-agente] docs de credenciales: antes de fijar scopes o un comando de verificación en criterios o SETUP, confirmar que la herramienta los acepta (gh auth login exige repo y read:org en un token classic) y que el comando corre donde existen las variables que verifica (el env de settings.local.json solo existe dentro de la sesión)."
+}

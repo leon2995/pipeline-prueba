@@ -1,0 +1,81 @@
+{
+  "task": "cuenta-agente",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "categoria": "token",
+      "file": "SETUP.md",
+      "detail": "Paso c, líneas 105-107: `GH_CONFIG_DIR=\"$HOME/.talos-gh\" gh auth login --hostname github.com --git-protocol https --insecure-storage`. En modo interactivo con protocolo https, gh hace la pregunta \"Authenticate Git with your GitHub credentials? (Y/n)\" (el flag --git-protocol solo se salta la elección del protocolo) antes de \"Paste an authentication token\", y la respuesta por defecto es Sí. En la máquina de Leonardo el helper efectivo para github.com es `manager` (GCM), que no es de gh, así que gh sí hace la pregunta. Con Sí, GitCredentialFlow.Setup ve un helper ya configurado y llama a Update: corre `git credential reject` para host=github.com, que borra del Credential Manager de Windows la credencial guardada de leon2995, y después `git credential approve` con username=talos-bot y el token. Consecuencias: (1) el token de talos-bot queda también en el Credential Manager de Windows. Eso contradice SETUP.md:112 (\"queda en ~/.talos-gh/hosts.yml y no en el keyring\"), SETUP.md:161 y la sección Credenciales de CLAUDE.md, y el paso de rotación no lo menciona. (2) Desde la terminal de Leonardo, y desde la sesión del agente entre c y f, cuando todavía no tiene la plantilla, los `git push` salen en silencio como talos-bot. (3) Las verificaciones de SETUP no lo detectan. `gh api user --jq .login` sin GH_CONFIG_DIR (línea 109) consulta gh y no el GCM. El paso f se corre dentro de la sesión, donde GIT_CONFIG_VALUE_0 vacío anula el GCM. El comando está escrito tal cual en SETUP y la respuesta por defecto lleva a este estado. No hace falta ningún error raro de Leonardo. Esto rompe lo que busca C7 (conectar talos-bot con el token solo en ~/.talos-gh) y mezcla las dos identidades.",
+      "fix": "En el paso c, indicar que se responda No a \"Authenticate Git with your GitHub credentials?\". Esa pregunta es la que activa el helper para talos-bot, y en el agente eso ya lo hace la plantilla por GIT_CONFIG_*. Agregar una verificación en la terminal después del login: `git config --global --get-regexp credential` no cambió, y `git credential-manager github list` sigue mostrando solo leon2995. Documentar el remedio si ya se respondió Sí: borrar la entrada de talos-bot del GCM con `git credential-manager github logout talos-bot` y volver a iniciar sesión como leon2995. Según la regla 2 de Leonardo para el intento 3, agregarlo al PR y como verificación explícita de los pasos c y g.",
+      "lente": "token-identidad-proteccion"
+    },
+    {
+      "severity": "baja",
+      "categoria": "identidad",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "En las líneas 278-279, C4 solo compara GIT_AUTHOR_NAME y GIT_COMMITTER_NAME. GitHub atribuye cada commit por el email y no por el nombre. Si settings.local.json no trae GIT_AUTHOR_EMAIL o GIT_COMMITTER_EMAIL, por ejemplo al fusionar solo parte del bloque env en el paso f, git toma el user.email global de Leonardo. El hook deja pasar el commit y en GitHub queda atribuido a leon2995. Lo mismo pasa si queda el marcador ID_NUMERICO de la plantilla, y en ese caso el commit queda sin cuenta. C4 no exige el email, así que no rompe el criterio, y el paso g.3 lo detectaría (`commits[].authors[].login`). Aun así, es un chequeo de superficie sobre la identidad efectiva.",
+      "fix": "Exigir en C4 que GIT_AUTHOR_EMAIL y GIT_COMMITTER_EMAIL terminen en `+<esperado>@users.noreply.github.com` y no contengan ID_NUMERICO, con casos en la suite. Si se decide no hacerlo, dejarlo como verificación explícita en el paso g.",
+      "lente": "token-identidad-proteccion"
+    },
+    {
+      "severity": "baja",
+      "categoria": "identidad",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "En las líneas 292-318, el remoto de un `git push` sin argumentos se asume `origin` (línea 308). git usa branch.<rama>.pushRemote, remote.pushDefault o branch.<rama>.remote. Si la rama sigue a otro remoto, por ejemplo uno SSH, el hook valida la URL de origin mientras el push sale por el otro remoto. Además, la verificación corre en el cwd del hook: con `cd otro-repo && git push`, se valida el origin del repo del pipeline. En este repo, con un solo remoto, el riesgo es bajo.",
+      "fix": "Sin remoto explícito, resolverlo con `git config branch.$(git branch --show-current).pushRemote`, luego remote.pushDefault, luego branch.<rama>.remote y por último origin. Si no, documentarlo como límite junto a los de la línea 37.",
+      "lente": "token-identidad-proteccion"
+    },
+    {
+      "severity": "baja",
+      "categoria": "proteccion_ramas",
+      "file": "SETUP.md",
+      "detail": "La línea 96 propone `gh run rerun <id>` para que los PRs abiertos reciban el check `hooks`. Un rerun usa el mismo GITHUB_SHA y el mismo workflow de la corrida original. En un PR cuya corrida es anterior al merge de T1, el merge commit viejo no tiene el job `hooks`, así que el rerun no produce ese check y el PR queda esperando un check obligatorio que nunca llega. El push vacío que se da como alternativa sí funciona, porque recalcula refs/pull/N/merge con la base nueva.",
+      "fix": "Quitar `gh run rerun` y dejar el push vacío (`git commit --allow-empty` y push), o cerrar y reabrir el PR.",
+      "lente": "token-identidad-proteccion"
+    },
+    {
+      "severity": "baja",
+      "categoria": "otro",
+      "file": "scripts/test-hooks.sh",
+      "detail": "El caso de la línea 492, `g permite 'git push -u origin feat/x'` con la identidad completa, depende del remoto real del clon donde corre la suite. El hook consulta `git remote get-url --push origin` en el repo, y el caso solo pasa si origin es HTTPS de github.com. En CI pasa gracias a actions/checkout. En un clon por SSH, la suite fallaría sin que haya una regresión.",
+      "fix": "Correr ese caso en un repo temporal (`git init` en $tmp con `git remote add origin https://github.com/o/r.git`) o usar la URL literal, como en el caso de la línea 497.",
+      "lente": "token-identidad-proteccion"
+    },
+    {
+      "severity": "media",
+      "categoria": "otro",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Falso positivo con la identidad completa, líneas 247-251 y 292-317. Un segmento cuenta como push si en cualquier parte aparece ' git push' (I incluye el espacio), y el remoto es el primer token que no empieza con '-' después de una palabra exacta 'push'. Así se leen como remoto las redirecciones y el texto de -m o --title. Con talos_env completo y identidad-agente.txt presente, estos comandos cotidianos se bloquean con un mensaje engañoso: (1) `git push 2>&1 | tail -3`, porque tr parte en '&', el segmento queda 'git push 2>' y el remoto sale '2>': \"el remoto '2>' () no es HTTPS de github.com\". Lo mismo con `git push >/dev/null` y `git push 2>/dev/null`. (2) `git commit -m \"docs: el hook revisa git push antes del PR\"` da remoto 'antes'. (3) `gh pr create --title \"T4: git push con helper\" --body-file b.md` da remoto 'con'. CLAUDE.md manda los títulos en línea, y en este repo los títulos y commits hablan de git push a menudo. El engineer y el CTO hacen `git push` sin remoto en cada reintento FIX, así que la traba sale en el ciclo normal, y el mensaje puede llevar al agente a tocar el remoto. La suite no tiene ningún caso de push sin remoto ni con redirección con la identidad activa (líneas 490-502). No rompe un criterio porque bloquea de más, no de menos.",
+      "fix": "Antes de clasificar, quitar las redirecciones del segmento como hace analizar_git (2>&1, >archivo, 2>/dev/null) y el texto entre comillas con el mismo sed de la línea 256. Contar como push solo la invocación real: git, flags globales y después push, al inicio del segmento o tras un separador. Agregar casos con la identidad completa: permite `git push`, `git push 2>&1 | tail -3`, `git commit -m \"explica git push antes del PR\"` y `gh pr create --title \"T4: git push con helper\" --body-file b.md`.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "categoria": "otro",
+      "file": "scripts/test-hooks.sh",
+      "detail": "No hay caso que ejercite el bloqueo del helper efectivo (guard-commands.sh:289-291). Todos los casos de 'plantilla' (líneas 513-519) los corta antes el chequeo exacto de GIT_CONFIG_*. Una mutación que borre las líneas 289-291 pasa la suite, aunque es el control que Codex pidió en el intento 2. Se puede provocar: GIT_CONFIG_PARAMETERS se lee después de GIT_CONFIG_COUNT, así que la plantilla exacta más GIT_CONFIG_PARAMETERS=\"'credential.https://github.com.helper'='manager'\" hace que --get-urlmatch devuelva manager. Además, los casos que permiten `git push -u origin feat/x` con identidad dependen de que el origin del clon que corre la suite sea HTTPS sin usuario. En un clon por SSH la suite falla sin que haya regresión.",
+      "fix": "Agregar el caso: plantilla exacta más GIT_CONFIG_PARAMETERS con el helper manager → bloquea con 'helper de credenciales efectivo'. Para no depender del clon, correr los casos de push dentro de un repo temporal con `git init` y un origin https://github.com/o/r.git.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "categoria": "evasion_analizador_shell",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "env_imprime (líneas 58-80) toma un token de redirección como si fuera el comando: `env > /tmp/e.txt`, `printenv >/tmp/e.txt` y `env 2>&1 | grep GIT` (el segmento queda 'env 2>') no se bloquean, y en la práctica es 'env sin argumentos'. `( env )` tampoco se bloquea: se recorta el '(' pero no el espacio que sigue. Sin impacto real, porque por C5 ningún token vive en el entorno. Tampoco es un límite documentado.",
+      "fix": "En env_imprime, ignorar los tokens que empiezan con [0-9]*[<>] (y su archivo si el operador va solo), y volver a recortar espacios después de quitar '('. Agregar casos: bloquea `env > /tmp/e.txt` y `( env )`.",
+      "lente": "analizador-suite"
+    },
+    {
+      "severity": "baja",
+      "categoria": "identidad",
+      "file": "CLAUDE.md",
+      "detail": "CLAUDE.md (sección Credenciales) dice que el hook exige la identidad de talos-bot para 'commits, push y escrituras en GitHub', pero C4 solo cubre gh pr create|merge|review|comment|edit|close|reopen|ready y gh api de escritura. Con identidad-agente.txt y sin la identidad, pasan como la cuenta de Leonardo `gh issue create`, `gh issue comment`, `gh run rerun`, `gh workflow run`, `gh label create` y `gh release create`. Cumple C4 al pie de la letra, pero la documentación promete más. En la misma línea, C3 bloquea `gh pr review --approve` pero no `gh api repos/{owner}/{repo}/pulls/5/reviews -f event=APPROVE`, aunque con la identidad eso sale como talos-bot y el servidor lo mitiga.",
+      "fix": "Acotar la frase de CLAUDE.md a los subcomandos que cubre C4, o extender el clasificador a `gh (issue|release|label|run|workflow|repo) <verbo de escritura>`. Documentarlo en el PR según la regla (2) de Leonardo para el intento 3.",
+      "lente": "analizador-suite"
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [cuenta-agente] docs de login de una segunda cuenta con gh: con --git-protocol https, gh auth login pregunta \"Authenticate Git with your GitHub credentials?\" (Sí por defecto). Si ya hay otro helper, como GCM, corre git credential reject/approve y cambia la credencial de git de la cuenta principal por la nueva. Hay que indicar la respuesta No y verificar después el helper del sistema. | - [2026-09-28] [cuenta-agente] hooks de comandos: para leer los argumentos de un subcomando (el remoto de git push), ubicar la invocación real y quitar antes las redirecciones y el texto entre comillas; si se toma el primer token después de cualquier palabra 'push', el remoto sale de un '2>' o de un --title."
+}
