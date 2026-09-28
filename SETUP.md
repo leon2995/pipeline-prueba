@@ -108,9 +108,11 @@ Con `--insecure-storage` el token queda en `~/.talos-gh/hosts.yml` y no toca el 
 **f. Conectar al agente.** Copia `.claude/settings.local.example.json` como `.claude/settings.local.json`. Si ya existe (Claude Code lo crea al guardar permisos), fusiona solo el bloque `env`. Completa `GH_CONFIG_DIR` con la ruta real (`C:/Users/<tu usuario>/.talos-gh`) y el email noreply de `talos-bot`. Lo encuentras en Settings → Emails de esa cuenta y tiene la forma `<id>+talos-bot@users.noreply.github.com`. El archivo no lleva el token. Reinicia la sesión de Claude Code para que tome el `env` nuevo. Para verificar el helper de credenciales:
 
 ```bash
-git config --show-origin --get-all credential.helper
-# las dos últimas líneas deben ser el valor vacío y "!gh auth git-credential", con origen "command line":
-# el vacío anula el helper del sistema (manager) que aparece arriba
+git config --show-origin --get-regexp '^credential\..*helper$'
+# deben aparecer dos líneas "command line: credential.https://github.com.helper": la primera vacía y la
+# segunda "!gh auth git-credential". El valor vacío anula, para github.com, el helper del sistema
+# (credential.helper manager) que aparece arriba.
+git config --get-urlmatch credential.helper https://github.com   # debe decir: !gh auth git-credential
 ```
 
 **g. Activación y verificación conjunta.** Con el agente ya como `talos-bot`:

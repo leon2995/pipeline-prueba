@@ -35,26 +35,51 @@ cmd=$(printf '%s' "$input" | json_get command)
 # vive su token; la configuración sale de .claude/settings.local.json. Se bloquea lo que un agente
 # haría por costumbre y expondría una credencial, cambiaría de cuenta o aprobaría un PR.
 bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
+# I: inicio de una invocación. F: opciones (con su valor) entre gh o git y el subcomando, o entre
+# el grupo y el subcomando (gh -R o/r pr review, gh pr -R o/r review, gh --hostname x auth token).
+I='(^|[;&|( `])'
+F='( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)*'
 sin_plantilla=${cmd//settings.local.example/}
 if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|settings\.local|\.talos-gh|hosts\.yml'; then
   bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
 fi
-if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +auth +(token|git-credential)([^[:alnum:]_-]|$)|(^|[;&|( `])gh +auth +status[^;&|]*( -[a-z]*t[a-z]*( |$)| --show-token)|(^|[;&|( `])git( +[^ ;&|]+)* +credential +(fill|approve|reject)'; then
+if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[:alnum:]_-]|\$)|${I}gh$F +auth$F +status[^;&|]*( -[a-z]*t[a-z]*( |\$)| --show-token)|${I}git( +[^ ;&|]+)* +credential +(fill|approve|reject)"; then
   bloqueo credenciales "el comando imprime una credencial (gh auth token, gh auth status -t, gh auth git-credential, git credential fill)."
 fi
+# env_imprime <segmento>: el segmento imprime variables de entorno: set, export, declare o typeset
+# sin argumentos; printenv sin variable; o env sin un comando que correr (solo opciones o VAR=x).
+env_imprime() {
+  local s=$1 t salta=0
+  case "$s" in
+    set|export|'export -p'|declare|'declare -p'|'declare -x'|'declare -px'|'declare -xp'|typeset|'typeset -p'|'typeset -x') return 0 ;;
+    printenv|printenv\ -*) return 0 ;;
+    env|env\ *) ;;
+    *) return 1 ;;
+  esac
+  set -f
+  set -- $s
+  set +f
+  shift
+  for t in "$@"; do
+    if [ "$salta" = 1 ]; then salta=0; continue; fi
+    case "$t" in
+      -u|--unset|-C|--chdir|-S|--split-string) salta=1 ;;
+      -*|*=*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
 while IFS= read -r seg; do
   seg="${seg#"${seg%%[![:space:]]*}"}"
   seg="${seg%"${seg##*[![:space:]]}"}"
   seg=${seg#\(}
-  case "$seg" in
-    env|env\ *|printenv|printenv\ *|set|export|'export -p'|declare|'declare -p'|'declare -x'|'declare -px'|'declare -xp'|typeset|'typeset -p'|'typeset -x')
-      bloqueo credenciales "el comando imprime variables de entorno ($seg)." ;;
-  esac
+  env_imprime "$seg" && bloqueo credenciales "el comando imprime variables de entorno ($seg)."
 done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
-if printf '%s\n' "$cmd" | grep -Eq 'GH_CONFIG_DIR|GIT_CONFIG_|(^|[;&|( `])gh +auth +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|$)|(^|[;&|( `])git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)'; then
-  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot sale de .claude/settings.local.json."
+if printf '%s\n' "$cmd" | grep -Eq "GH_CONFIG_DIR|GIT_CONFIG_|${I}gh$F +auth$F +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|\$)|${I}git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)|${I}env( +[^;&|]*)? +(-i|--ignore-environment|-)( |\$)"; then
+  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper, env -i). La identidad de talos-bot sale de .claude/settings.local.json."
 fi
-if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +pr +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |$))'; then
+if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +pr$F +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |\$))"; then
   bloqueo aprobación "el agente nunca aprueba PRs; la aprobación de code owner es de Leonardo."
 fi
 
@@ -162,8 +187,6 @@ deny_patterns=(
   'DROP (TABLE|DATABASE|SCHEMA)'
   'TRUNCATE'
   'cat .*\.env'
-  'printenv'
-  '^env( |$)'
   'echo \$[A-Za-z_]*(TOKEN|KEY|SECRET|PASSWORD)'
   'curl .* (-d|--data|-X POST|-X PUT|-X DELETE)'
 )
@@ -185,23 +208,33 @@ fi
 # exige (arranque, antes de conectar talos-bot).
 archivo_identidad="$(dirname "$0")/../identidad-agente.txt"
 if [ -e "$archivo_identidad" ]; then
-  patron_push='(^|[;&|( `])git( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +push([^[:alnum:]_-]|$)'
-  patron_commit='(^|[;&|( `])git( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +commit([^[:alnum:]_-]|$)'
-  escribe_git=0 escribe_gh=0
-  printf '%s\n' "$cmd" | grep -Eq "$patron_push|$patron_commit" && escribe_git=1
-  printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +pr +(create|merge|review|comment|edit|close|reopen|ready)([^[:alnum:]_-]|$)' && escribe_gh=1
-  if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +api( |$)'; then
-    # gh api escribe con campos (-f, -F, --field, --raw-field, --input, que implican POST), con
-    # graphql o con un método distinto de GET.
-    if printf '%s\n' "$cmd" | grep -Eq ' (-[fF]|--field|--raw-field|--input)| graphql( |$)'; then
-      escribe_gh=1
-    elif printf '%s\n' "$cmd" | grep -Eiq ' (-X|--method)[ =]*[a-z]+' &&
-         ! printf '%s\n' "$cmd" | grep -Eiq ' (-X|--method)[ =]*get( |$)'; then
-      escribe_gh=1
+  # Cada segmento (separado por ; & | o salto de línea) se clasifica por separado: una invocación
+  # con --help no escribe, pero no borra una escritura detectada en otro segmento.
+  escribe_git=0 escribe_gh=0 empuja=0
+  while IFS= read -r seg; do
+    [ -n "${seg//[[:space:]]/}" ] || continue
+    s=" $seg "
+    if printf '%s\n' "$s" | grep -Eq "${I}git$F +(commit|push)([^[:alnum:]_-]|\$)"; then
+      escribe_git=1
+      printf '%s\n' "$s" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)" && empuja=1
     fi
-  fi
-  # gh ... --help no escribe nada.
-  printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh [^;&|]*(--help|-h)( |$)' && escribe_gh=0
+    printf '%s\n' "$s" | grep -Eq "${I}gh( |\$)" || continue
+    printf '%s\n' "$s" | grep -Eq ' (--help|-h)( |$)' && continue
+    if printf '%s\n' "$s" | grep -Eq "${I}gh$F +pr$F +(create|new|merge|review|comment|edit|close|reopen|ready)([^[:alnum:]_-]|\$)"; then
+      escribe_gh=1
+    elif printf '%s\n' "$s" | grep -Eq "${I}gh$F +api( |\$)"; then
+      # gh api escribe con campos (-f, -F, --field, --raw-field, --input, que implican POST) o con
+      # graphql; y con un método distinto de GET. Cada -X/--method cuenta (gh usa el último): si
+      # alguno no es GET, o no se puede leer (por ejemplo -X "$M"), es escritura.
+      if printf '%s\n' "$s" | grep -Eq ' (-[fF]|--field|--raw-field|--input)| graphql( |$)'; then
+        escribe_gh=1
+      else
+        metodos=$(printf '%s\n' "$s" | grep -Eo ' (-X|--method)' | wc -l)
+        gets=$(printf '%s\n' "$s" | grep -Eio " (-X|--method)( +|=)?[\"']?get[\"']?( |\$)" | wc -l)
+        [ $((metodos)) -gt $((gets)) ] && escribe_gh=1
+      fi
+    fi
+  done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
   if [ "$escribe_git" = 1 ] || [ "$escribe_gh" = 1 ]; then
     esperado=$(tr -d '[:space:]' < "$archivo_identidad" 2>/dev/null)
     falta="falta la identidad de talos-bot (.claude/settings.local.json)"
@@ -209,7 +242,7 @@ if [ -e "$archivo_identidad" ]; then
     { [ -n "${GH_CONFIG_DIR:-}" ] && [ -n "${GIT_CONFIG_COUNT:-}" ]; } ||
       bloqueo identidad "$falta: GH_CONFIG_DIR o GIT_CONFIG_COUNT no están definidas en la sesión."
     [ "${GIT_AUTHOR_NAME:-}" = "$esperado" ] || bloqueo identidad "$falta: el autor de los commits no es $esperado."
-    if [ "$escribe_gh" = 1 ] || printf '%s\n' "$cmd" | grep -Eq "$patron_push"; then
+    if [ "$escribe_gh" = 1 ] || [ "$empuja" = 1 ]; then
       login=$(gh api user --jq .login 2>/dev/null) || login=""
       login=${login//$'\r'/}
       [ "$login" = "$esperado" ] || bloqueo identidad "$falta: GitHub responde como ${login:-desconocido}, no como $esperado."

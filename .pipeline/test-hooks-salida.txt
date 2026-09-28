@@ -231,6 +231,11 @@ ok     bloquea  export -p
 ok     bloquea  declare -p
 ok     bloquea  declare -x
 ok     bloquea  typeset
+ok     bloquea  printenv -0
+ok     bloquea  env -u FOO
+ok     bloquea  env LANG=C
+ok     bloquea  gh --hostname github.com auth token
+ok     bloquea  gh auth --hostname github.com status -t
 == guard-commands.sh: cambio de identidad (bloquea)
 ok     bloquea  gh auth login
 ok     bloquea  gh auth logout
@@ -244,10 +249,14 @@ ok     bloquea  GIT_CONFIG_PARAMETERS=x git push origin feat/x
 ok     bloquea  git -c credential.helper= push origin feat/x
 ok     bloquea  git config --global credential.helper manager
 ok     bloquea  git config credential.https://github.com.helper x
+ok     bloquea  env -i bash
+ok     bloquea  env - git push -u origin feat/x
 == guard-commands.sh: aprobación de PRs (bloquea)
 ok     bloquea  gh pr review 5 --approve
 ok     bloquea  gh pr review 5 -a
 ok     bloquea  gh pr review 5 -a -b ok
+ok     bloquea  gh pr -R leon2995/pipeline-prueba review 5 --approve
+ok     bloquea  gh -R leon2995/pipeline-prueba pr review 5 -a
 == guard-commands.sh: credenciales e identidad (permitidos)
 ok     permite  gh auth status
 ok     permite  gh pr review 5 --comment -b "ok"
@@ -259,6 +268,9 @@ ok     permite  set -e
 ok     permite  export FOO=1
 ok     permite  declare -a lista
 ok     permite  git config --get user.name
+ok     permite  env LANG=C sort
+ok     permite  env -u FOO python x.py
+ok     permite  printenv PATH
 == guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
 -- identidad
 -- sin la identidad de talos-bot
@@ -271,6 +283,23 @@ ok     bloquea  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
 ok     bloquea  gh api graphql -f query=x
 ok     bloquea  gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json
 ok     bloquea  gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh pr create --title x --body y; gh pr view --help
+ok     bloquea  gh pr new --fill
+ok     bloquea  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     bloquea  gh pr -R leon2995/pipeline-prueba edit 5 --title x
+ok     bloquea  gh pr edit 5 --title x
+ok     bloquea  gh pr close 5
+ok     bloquea  gh pr reopen 5
+ok     bloquea  gh pr ready 5
+ok     bloquea  gh pr review 5 --comment -b x
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE
+ok     bloquea  gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET
+ok     bloquea  gh api -X "POST" repos/{owner}/{repo}/issues/5/comments
+ok     bloquea  gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x
+ok     bloquea  gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x
+ok     bloquea  git -C . push -u origin feat/x
+ok     permite  gh api -XGET repos/{owner}/{repo}/pulls/5
+ok     permite  gh api --method=GET repos/{owner}/{repo}/pulls/5
 ok     permite  git status
 ok     permite  git log --oneline -3
 ok     permite  gh pr view 101
@@ -283,6 +312,7 @@ ok     permite  git push -u origin feat/x
 ok     permite  gh pr create --title x --body y
 ok     permite  gh pr merge 101 --squash
 ok     permite  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
+ok     permite  gh -R leon2995/pipeline-prueba pr create --title x --body y
 ok     bloquea  gh pr merge 102 --squash
 -- identidad incompleta o de otra cuenta
 ok     bloquea  git commit -m x
@@ -321,6 +351,7 @@ ok     pasa     settings.json deniega Read(~/.talos-gh/**)
 ok     pasa     settings.json deniega Edit(~/.talos-gh/**)
 ok     pasa     settings.json deniega Write(~/.talos-gh/**)
 ok     pasa     .gitignore ignora .claude/settings.local.json
+ok     pasa     jq está instalado (requerido por los chequeos de la plantilla)
 ok     pasa     la plantilla es JSON válido
 ok     pasa     la plantilla apunta GH_CONFIG_DIR a ~/.talos-gh
 ok     pasa     la plantilla fija GIT_CONFIG_COUNT en 2
@@ -333,10 +364,12 @@ ok     pasa     la plantilla fija el committer talos-bot
 ok     pasa     la plantilla usa el email noreply del autor
 ok     pasa     la plantilla usa el email noreply del committer
 ok     falla    la plantilla no trae prefijos de token
-ok     pasa     CI tiene el job hooks
+ok     pasa     el job hooks corre en ubuntu-latest
 ok     pasa     el job hooks corre la suite
-ok     pasa     CI corre en push a feat/**
-ok     pasa     CI corre en push a fix/**
+ok     pasa     el job hooks corre la suite con mawk
+ok     pasa     el job hooks instala mawk si falta (no lo omite)
+ok     pasa     CI corre en pull_request
+ok     pasa     CI corre en push a feat/** y fix/**
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -388,4 +421,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-347 ok, 0 fallos
+380 ok, 0 fallos

@@ -14,15 +14,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: awk -W version 2>/dev/null | head -1 || true
       - run: bash scripts/test-hooks.sh
-      # En ubuntu-latest awk es gawk; esta corrida prueba el analizador con mawk si la imagen lo trae.
+      # En ubuntu-latest awk es gawk; esta corrida prueba el analizador con mawk (lo instala si falta).
       - name: test-hooks con mawk
         run: |
-          if command -v mawk >/dev/null 2>&1; then
-            mkdir -p /tmp/con-mawk && ln -sf "$(command -v mawk)" /tmp/con-mawk/awk
-            PATH="/tmp/con-mawk:$PATH" bash scripts/test-hooks.sh
-          else
-            echo "mawk no está instalado en la imagen: se omite"
-          fi
+          command -v mawk >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq mawk; }
+          mkdir -p /tmp/con-mawk && ln -sf "$(command -v mawk)" /tmp/con-mawk/awk
+          /tmp/con-mawk/awk -W version 2>&1 | head -1
+          PATH="/tmp/con-mawk:$PATH" bash scripts/test-hooks.sh
 
   detect:
     runs-on: ubuntu-latest

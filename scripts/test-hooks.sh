@@ -386,6 +386,11 @@ g bloquea 'export -p' 'credenciales'
 g bloquea 'declare -p' 'credenciales'
 g bloquea 'declare -x' 'credenciales'
 g bloquea 'typeset' 'credenciales'
+g bloquea 'printenv -0' 'credenciales'
+g bloquea 'env -u FOO' 'credenciales'
+g bloquea 'env LANG=C' 'credenciales'
+g bloquea 'gh --hostname github.com auth token' 'credenciales'
+g bloquea 'gh auth --hostname github.com status -t' 'credenciales'
 
 echo "== guard-commands.sh: cambio de identidad (bloquea)"
 g bloquea 'gh auth login' 'identidad'
@@ -400,11 +405,15 @@ g bloquea 'GIT_CONFIG_PARAMETERS=x git push origin feat/x' 'identidad'
 g bloquea 'git -c credential.helper= push origin feat/x' 'identidad'
 g bloquea 'git config --global credential.helper manager' 'identidad'
 g bloquea 'git config credential.https://github.com.helper x' 'identidad'
+g bloquea 'env -i bash' 'identidad'
+g bloquea 'env - git push -u origin feat/x' 'identidad'
 
 echo "== guard-commands.sh: aprobación de PRs (bloquea)"
 g bloquea 'gh pr review 5 --approve' 'aprobación'
 g bloquea 'gh pr review 5 -a' 'aprobación'
 g bloquea 'gh pr review 5 -a -b ok' 'aprobación'
+g bloquea 'gh pr -R leon2995/pipeline-prueba review 5 --approve' 'aprobación'
+g bloquea 'gh -R leon2995/pipeline-prueba pr review 5 -a' 'aprobación'
 
 echo "== guard-commands.sh: credenciales e identidad (permitidos)"
 g permite 'gh auth status'
@@ -417,6 +426,9 @@ g permite 'set -e'
 g permite 'export FOO=1'
 g permite 'declare -a lista'
 g permite 'git config --get user.name'
+g permite 'env LANG=C sort'
+g permite 'env -u FOO python x.py'
+g permite 'printenv PATH'
 
 echo "== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
@@ -440,6 +452,23 @@ g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' 'identidad d
 g bloquea 'gh api graphql -f query=x' 'identidad de talos-bot'
 g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' 'identidad de talos-bot'
 g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot'
+g bloquea 'gh pr create --title x --body y; gh pr view --help' 'identidad de talos-bot'
+g bloquea 'gh pr new --fill' 'identidad de talos-bot'
+g bloquea 'gh -R leon2995/pipeline-prueba pr create --title x --body y' 'identidad de talos-bot'
+g bloquea 'gh pr -R leon2995/pipeline-prueba edit 5 --title x' 'identidad de talos-bot'
+g bloquea 'gh pr edit 5 --title x' 'identidad de talos-bot'
+g bloquea 'gh pr close 5' 'identidad de talos-bot'
+g bloquea 'gh pr reopen 5' 'identidad de talos-bot'
+g bloquea 'gh pr ready 5' 'identidad de talos-bot'
+g bloquea 'gh pr review 5 --comment -b x' 'identidad de talos-bot'
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE' 'identidad de talos-bot'
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET' 'identidad de talos-bot'
+g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' 'identidad de talos-bot'
+g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot'
+g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' 'identidad de talos-bot'
+g bloquea 'git -C . push -u origin feat/x' 'identidad de talos-bot'
+g permite 'gh api -XGET repos/{owner}/{repo}/pulls/5'
+g permite 'gh api --method=GET repos/{owner}/{repo}/pulls/5'
 g permite 'git status'
 g permite 'git log --oneline -3'
 g permite 'gh pr view 101'
@@ -453,6 +482,7 @@ g permite 'git push -u origin feat/x'
 g permite 'gh pr create --title x --body y'
 g permite 'gh pr merge 101 --squash'
 g permite 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x'
+g permite 'gh -R leon2995/pipeline-prueba pr create --title x --body y'
 g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
 echo "-- identidad incompleta o de otra cuenta"
 extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=leon2995 FAKE_GH_LOGIN=talos-bot)
@@ -562,6 +592,8 @@ done
 tiene_linea() { tr -d '\r' < "$2" | grep -qxF "$1"; }
 chequeo pasa '.gitignore ignora .claude/settings.local.json' tiene_linea '.claude/settings.local.json' "$repo/.gitignore"
 p="$repo/.claude/settings.local.example.json"
+# jq es obligatorio para estos chequeos: sin jq la suite falla en lugar de saltárselos.
+chequeo pasa 'jq está instalado (requerido por los chequeos de la plantilla)' command -v jq
 if command -v jq >/dev/null 2>&1; then
   campo() { [ "$(jq -r --arg k "$1" '.env[$k] // "__falta__"' "$p")" = "$2" ]; }
   termina() { case "$(jq -r --arg k "$1" '.env[$k] // ""' "$p")" in *"$2") return 0 ;; esac; return 1; }
@@ -576,15 +608,26 @@ if command -v jq >/dev/null 2>&1; then
   chequeo pasa 'la plantilla fija el committer talos-bot' campo GIT_COMMITTER_NAME talos-bot
   chequeo pasa 'la plantilla usa el email noreply del autor' termina GIT_AUTHOR_EMAIL '+talos-bot@users.noreply.github.com'
   chequeo pasa 'la plantilla usa el email noreply del committer' termina GIT_COMMITTER_EMAIL '+talos-bot@users.noreply.github.com'
-else
-  echo "omitido: jq no está instalado (chequeos de la plantilla)"
 fi
 chequeo falla 'la plantilla no trae prefijos de token' grep -qE 'ghp_|gho_|ghu_|ghs_|ghr_|github_pat_' "$p"
 ci="$repo/.github/workflows/ci.yml"
-chequeo pasa 'CI tiene el job hooks' grep -qE '^  hooks:' "$ci"
-chequeo pasa 'el job hooks corre la suite' grep -qF 'bash scripts/test-hooks.sh' "$ci"
-chequeo pasa 'CI corre en push a feat/**' grep -qF "'feat/**'" "$ci"
-chequeo pasa 'CI corre en push a fix/**' grep -qF "'fix/**'" "$ci"
+# bloque_yaml <archivo> <clave> <sangría>: imprime las líneas de esa clave del YAML, sin
+# comentarios, hasta la próxima clave con la misma sangría o menos.
+bloque_yaml() {
+  tr -d '\r' < "$1" | awk -v k="$3$2:" -v n="${#3}" '
+    $0 == k { dentro = 1; next }
+    dentro && /^[[:space:]]*#/ { next }
+    dentro && /[^[:space:]]/ { match($0, /^ */); if (RLENGTH <= n) exit; print }'
+}
+job_hooks() { bloque_yaml "$ci" hooks '  '; }
+disparadores() { bloque_yaml "$ci" on ''; }
+en_bloque() { "$1" | grep -qE "$2"; }
+chequeo pasa 'el job hooks corre en ubuntu-latest' en_bloque job_hooks '^    runs-on: ubuntu-latest$'
+chequeo pasa 'el job hooks corre la suite' en_bloque job_hooks '^      - run: bash scripts/test-hooks.sh$'
+chequeo pasa 'el job hooks corre la suite con mawk' en_bloque job_hooks 'PATH="/tmp/con-mawk:\$PATH" bash scripts/test-hooks.sh'
+chequeo pasa 'el job hooks instala mawk si falta (no lo omite)' en_bloque job_hooks 'apt-get install -y[a-z -]* mawk'
+chequeo pasa 'CI corre en pull_request' en_bloque disparadores '^  pull_request:'
+chequeo pasa 'CI corre en push a feat/** y fix/**' en_bloque disparadores "^    branches: \[.*'feat/\*\*'.*'fix/\*\*'.*\]"
 
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }
