@@ -30,6 +30,34 @@ input=$(cat)
 cmd=$(printf '%s' "$input" | json_get command)
 [ -z "$cmd" ] && exit 0
 
+# Credenciales e identidad del agente (cuenta-agente). Modelo de amenaza: errores del agente. El
+# agente trabaja como talos-bot con GH_CONFIG_DIR apuntando a ~/.talos-gh (fuera del repo), donde
+# vive su token; la configuración sale de .claude/settings.local.json. Se bloquea lo que un agente
+# haría por costumbre y expondría una credencial, cambiaría de cuenta o aprobaría un PR.
+bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
+sin_plantilla=${cmd//settings.local.example/}
+if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|settings\.local|\.talos-gh|hosts\.yml'; then
+  bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
+fi
+if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +auth +(token|git-credential)([^[:alnum:]_-]|$)|(^|[;&|( `])gh +auth +status[^;&|]*( -[a-z]*t[a-z]*( |$)| --show-token)|(^|[;&|( `])git( +[^ ;&|]+)* +credential +(fill|approve|reject)'; then
+  bloqueo credenciales "el comando imprime una credencial (gh auth token, gh auth status -t, gh auth git-credential, git credential fill)."
+fi
+while IFS= read -r seg; do
+  seg="${seg#"${seg%%[![:space:]]*}"}"
+  seg="${seg%"${seg##*[![:space:]]}"}"
+  seg=${seg#\(}
+  case "$seg" in
+    env|env\ *|printenv|printenv\ *|set|export|'export -p'|declare|'declare -p'|'declare -x'|'declare -px'|'declare -xp'|typeset|'typeset -p'|'typeset -x')
+      bloqueo credenciales "el comando imprime variables de entorno ($seg)." ;;
+  esac
+done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
+if printf '%s\n' "$cmd" | grep -Eq 'GH_CONFIG_DIR|GIT_CONFIG_|(^|[;&|( `])gh +auth +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|$)|(^|[;&|( `])git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)'; then
+  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot sale de .claude/settings.local.json."
+fi
+if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +pr +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |$))'; then
+  bloqueo aprobación "el agente nunca aprueba PRs; la aprobación de code owner es de Leonardo."
+fi
+
 # Analiza las invocaciones de git y responde una sola palabra: force, main, borrado o limpio.
 # - force: push forzado en cualquier forma y posición. --force, --force-with-lease,
 #   --force-if-includes y sus abreviaturas desde --f; -f solo o combinado (-uf, -fu); --mirror y
@@ -151,6 +179,44 @@ if printf '%s' "$cmd" | grep -Eq '^railway variables' && ! printf '%s' "$cmd" | 
   echo "Bloqueado: 'railway variables' solo se permite listando nombres, por ejemplo: railway variables --kv | cut -d= -f1" >&2
   exit 2
 fi
+# Identidad de talos-bot (C4 de cuenta-agente). Se activa cuando existe .claude/identidad-agente.txt
+# con el login esperado: desde ahí, sin la identidad de talos-bot se bloquean commits, push y
+# escrituras en GitHub en lugar de volver en silencio a la cuenta de Leonardo. Sin el archivo no se
+# exige (arranque, antes de conectar talos-bot).
+archivo_identidad="$(dirname "$0")/../identidad-agente.txt"
+if [ -e "$archivo_identidad" ]; then
+  patron_push='(^|[;&|( `])git( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +push([^[:alnum:]_-]|$)'
+  patron_commit='(^|[;&|( `])git( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +commit([^[:alnum:]_-]|$)'
+  escribe_git=0 escribe_gh=0
+  printf '%s\n' "$cmd" | grep -Eq "$patron_push|$patron_commit" && escribe_git=1
+  printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +pr +(create|merge|review|comment|edit|close|reopen|ready)([^[:alnum:]_-]|$)' && escribe_gh=1
+  if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh +api( |$)'; then
+    # gh api escribe con campos (-f, -F, --field, --raw-field, --input, que implican POST), con
+    # graphql o con un método distinto de GET.
+    if printf '%s\n' "$cmd" | grep -Eq ' (-[fF]|--field|--raw-field|--input)| graphql( |$)'; then
+      escribe_gh=1
+    elif printf '%s\n' "$cmd" | grep -Eiq ' (-X|--method)[ =]*[a-z]+' &&
+         ! printf '%s\n' "$cmd" | grep -Eiq ' (-X|--method)[ =]*get( |$)'; then
+      escribe_gh=1
+    fi
+  fi
+  # gh ... --help no escribe nada.
+  printf '%s\n' "$cmd" | grep -Eq '(^|[;&|( `])gh [^;&|]*(--help|-h)( |$)' && escribe_gh=0
+  if [ "$escribe_git" = 1 ] || [ "$escribe_gh" = 1 ]; then
+    esperado=$(tr -d '[:space:]' < "$archivo_identidad" 2>/dev/null)
+    falta="falta la identidad de talos-bot (.claude/settings.local.json)"
+    [ -n "$esperado" ] || bloqueo identidad "$falta: .claude/identidad-agente.txt está vacío o no se puede leer."
+    { [ -n "${GH_CONFIG_DIR:-}" ] && [ -n "${GIT_CONFIG_COUNT:-}" ]; } ||
+      bloqueo identidad "$falta: GH_CONFIG_DIR o GIT_CONFIG_COUNT no están definidas en la sesión."
+    [ "${GIT_AUTHOR_NAME:-}" = "$esperado" ] || bloqueo identidad "$falta: el autor de los commits no es $esperado."
+    if [ "$escribe_gh" = 1 ] || printf '%s\n' "$cmd" | grep -Eq "$patron_push"; then
+      login=$(gh api user --jq .login 2>/dev/null) || login=""
+      login=${login//$'\r'/}
+      [ "$login" = "$esperado" ] || bloqueo identidad "$falta: GitHub responde como ${login:-desconocido}, no como $esperado."
+    fi
+  fi
+fi
+
 # gh pr merge: solo a staging, con número de PR explícito, un merge por comando, sin --admin,
 # --auto ni borrar la rama, y nunca un PR que toque (modifique, borre o renombre) una ruta de
 # .claude/rutas-gobierno.txt: esos los mergea Leonardo, también a staging. Si algo no se puede
@@ -228,6 +294,7 @@ if printf '%s\n' "$cmd" | grep -Eq "$patron_merge"; then
   for a in ${args[@]+"${args[@]}"}; do
     if [ "$salta" = 1 ]; then salta=0; continue; fi
     case "$a" in
+      --help|-h) exit 0 ;;                # muestra la ayuda, no mergea
       [0-9]*[\<\>]*|[\<\>]*)              # redirección: >archivo, 2>err, o el operador solo
         case "$a" in *[!0-9\<\>]*) ;; *) salta=1 ;; esac ;;
       --admin|--admin=*) bloquear "--admin salta las protecciones de rama." ;;
@@ -268,6 +335,10 @@ if printf '%s\n' "$cmd" | grep -Eq "$patron_merge"; then
     r="${r%"${r##*[![:space:]]}"}"
     case "$r" in ''|'#'*) continue ;; esac
     case "${r#\*\*/}" in *'*'*) bloquear "regla no soportada en .claude/rutas-gobierno.txt: $r" ;; esac
+    # **/X y **/X/ con una barra interna no tienen traducción fiel a CODEOWNERS (quedaría anclada).
+    case "$r" in
+      '**/'*) x=${r#\*\*/}; case "${x%/}" in */*|'') bloquear "regla no soportada en .claude/rutas-gobierno.txt (barra interna): $r" ;; esac ;;
+    esac
     reglas+=("$(minusculas "$r")")
   done <<< "$texto_reglas"
   [ "${#reglas[@]}" -gt 0 ] || bloquear ".claude/rutas-gobierno.txt no tiene reglas; no se puede verificar el PR."
