@@ -3,13 +3,20 @@
 # verifica el código de salida (2 = bloquea, 0 = permite). Termina con 1 si algún caso falla.
 # Uso: bash scripts/test-hooks.sh
 set -uo pipefail
-hooks="$(cd "$(dirname "$0")/.." && pwd)/.claude/hooks"
+repo="$(cd "$(dirname "$0")/.." && pwd)"
 ok=0
 fallos=0
 extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas o un gh falso
-hooks_alt=""    # si no está vacío, se corre el hook de este directorio (copia) en lugar del real
+hooks_alt=""    # si no está vacío, se corre el hook de este directorio (copia) en lugar del base
+extra_env=()    # variables de entorno para el hook (por ejemplo la identidad de talos-bot)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+# La suite corre sobre una copia de los hooks y de rutas-gobierno.txt, sin identidad-agente.txt:
+# el resultado no depende de que la identidad del agente esté activada en el repo (C4).
+mkdir -p "$tmp/base/.claude/hooks"
+cp "$repo"/.claude/hooks/*.sh "$tmp/base/.claude/hooks/"
+cp "$repo/.claude/rutas-gobierno.txt" "$tmp/base/.claude/" 2>/dev/null
+hooks="$tmp/base/.claude/hooks"
 
 # Escapa un texto para meterlo en un string JSON: \, " y saltos de línea.
 esc() {
@@ -26,7 +33,11 @@ esc() {
 caso() {
   local hook=$1 quiere=$2 json=$3 desc=${4//$'\n'/\\n} motivo=${5:-} esperado=0 salio err
   [ "$quiere" = bloquea ] && esperado=2
-  err=$(printf '%s' "$json" | PATH="$extra_path$PATH" bash "${hooks_alt:-$hooks}/$hook" 2>&1 >/dev/null)
+  # El hook corre sin las variables de identidad de la sesión que lanza la suite (salvo las que
+  # el caso pida en extra_env), para que el resultado no dependa de quién la corre.
+  err=$(printf '%s' "$json" | env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT -u GIT_AUTHOR_NAME \
+    -u GIT_COMMITTER_NAME -u GH_TOKEN -u GITHUB_TOKEN -u FAKE_GH_LOGIN ${extra_env[@]+"${extra_env[@]}"} \
+    PATH="$extra_path$PATH" bash "${hooks_alt:-$hooks}/$hook" 2>&1 >/dev/null)
   salio=$?
   if [ "$salio" -eq "$esperado" ] && { [ -z "$motivo" ] || [[ "$err" == *"$motivo"* ]]; }; then
     ok=$((ok + 1))
@@ -43,6 +54,21 @@ archivo() { caso "$1" "$2" "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path
 stop() { caso run-tests.sh "$1" "{\"hook_event_name\":\"Stop\",\"cwd\":\"$(esc "$2")\",\"stop_hook_active\":$3}" "$4"; }
 
 g() { bash_cmd guard-commands.sh "$@"; }
+
+# chequeo <pasa|falla> <descripción> <comando...>: corre un comando de verificación (no un hook).
+chequeo() {
+  local quiere=$1 desc=$2 salio
+  shift 2
+  "$@" >/dev/null 2>&1
+  salio=$?
+  if { [ "$quiere" = pasa ] && [ "$salio" -eq 0 ]; } || { [ "$quiere" = falla ] && [ "$salio" -ne 0 ]; }; then
+    ok=$((ok + 1))
+    printf 'ok     %-8s %s\n' "$quiere" "$desc"
+  else
+    fallos=$((fallos + 1))
+    printf 'FALLO  %-8s %s (salió %s)\n' "$quiere" "$desc" "$salio"
+  fi
+}
 
 echo "== guard-commands.sh: push forzado (bloquea)"
 g bloquea 'git push --force origin feat/x'
@@ -132,7 +158,7 @@ g permite 'git push origin main:feat/x'
 g permite 'git push origin feat/x && git checkout main'
 g permite 'git checkout main'
 g permite 'git push --dry-run origin feat/x'
-g permite 'GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x'
+g bloquea 'GIT_CONFIG_NOSYSTEM=1 git push -u origin feat/x' 'identidad'
 
 echo "== guard-commands.sh: falso positivo aceptado (no respeta comillas, para ver dentro de bash -c)"
 g bloquea 'git commit -m "revertir el git push --force de ayer"'
@@ -189,6 +215,9 @@ case "$n" in
 esac
 [ -z "$total" ] && total=${#rutas[@]}
 case "$args" in
+  "api user --jq .login")
+    [ -n "${FAKE_GH_LOGIN:-}" ] || exit 1
+    printf '%s\n' "$FAKE_GH_LOGIN" ;;
   "pr view"*"--json number,baseRefName,changedFiles,files --jq "*)
     printf '%s\n' "$n" "$base" "$total" "${#rutas[@]}" ${rutas[@]+"${rutas[@]}"} ;;
   "pr view"*"--json baseRefName -q .baseRefName")
@@ -322,8 +351,240 @@ g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
 variante no-soportada
 printf '**/CLAUDE.md\n*.sh\n' > "$tmp/reglas/no-soportada/.claude/rutas-gobierno.txt"
 g bloquea 'gh pr merge 101 --squash' 'regla no soportada'
+variante barra-interna-dir
+printf '**/CLAUDE.md\n**/docs/adr/\n' > "$tmp/reglas/barra-interna-dir/.claude/rutas-gobierno.txt"
+g bloquea 'gh pr merge 101 --squash' 'regla no soportada'
+variante barra-interna-archivo
+printf '**/a/CLAUDE.md\n' > "$tmp/reglas/barra-interna-archivo/.claude/rutas-gobierno.txt"
+g bloquea 'gh pr merge 101 --squash' 'regla no soportada'
 hooks_alt=""
 extra_path=""
+
+echo "== guard-commands.sh: credenciales (bloquea)"
+g bloquea 'grep -rn GH_TOKEN .' 'credenciales'
+g bloquea 'echo "$GH_TOKEN"' 'credenciales'
+g bloquea 'echo ${GITHUB_TOKEN}' 'credenciales'
+g bloquea 'echo ghp_' 'credenciales'
+g bloquea 'echo github_pat_' 'credenciales'
+g bloquea 'cat .claude/settings.local.json' 'credenciales'
+g bloquea 'grep -rn helper .claude/settings.local.json' 'credenciales'
+g bloquea 'cat ~/.talos-gh/hosts.yml' 'credenciales'
+g bloquea 'ls ~/.talos-gh' 'credenciales'
+g bloquea 'gh auth token' 'credenciales'
+g bloquea 'gh auth status -t' 'credenciales'
+g bloquea 'gh auth status --show-token' 'credenciales'
+g bloquea 'gh auth git-credential get' 'credenciales'
+g bloquea 'git credential fill < /dev/null' 'credenciales'
+g bloquea 'git credential approve' 'credenciales'
+g bloquea 'env' 'credenciales'
+g bloquea 'ls && env' 'credenciales'
+g bloquea 'env | sort' 'credenciales'
+g bloquea 'printenv' 'credenciales'
+g bloquea 'set' 'credenciales'
+g bloquea 'export' 'credenciales'
+g bloquea 'export -p' 'credenciales'
+g bloquea 'declare -p' 'credenciales'
+g bloquea 'declare -x' 'credenciales'
+g bloquea 'typeset' 'credenciales'
+
+echo "== guard-commands.sh: cambio de identidad (bloquea)"
+g bloquea 'gh auth login' 'identidad'
+g bloquea 'gh auth logout' 'identidad'
+g bloquea 'gh auth switch -u leon2995' 'identidad'
+g bloquea 'gh auth refresh -s workflow' 'identidad'
+g bloquea 'gh auth setup-git' 'identidad'
+g bloquea 'GH_CONFIG_DIR= gh pr list' 'identidad'
+g bloquea 'unset GH_CONFIG_DIR' 'identidad'
+g bloquea 'export GIT_CONFIG_COUNT=0' 'identidad'
+g bloquea 'GIT_CONFIG_PARAMETERS=x git push origin feat/x' 'identidad'
+g bloquea 'git -c credential.helper= push origin feat/x' 'identidad'
+g bloquea 'git config --global credential.helper manager' 'identidad'
+g bloquea 'git config credential.https://github.com.helper x' 'identidad'
+
+echo "== guard-commands.sh: aprobación de PRs (bloquea)"
+g bloquea 'gh pr review 5 --approve' 'aprobación'
+g bloquea 'gh pr review 5 -a' 'aprobación'
+g bloquea 'gh pr review 5 -a -b ok' 'aprobación'
+
+echo "== guard-commands.sh: credenciales e identidad (permitidos)"
+g permite 'gh auth status'
+g permite 'gh pr review 5 --comment -b "ok"'
+g permite 'gh pr review 5 -r -b "faltan pruebas"'
+g permite 'gh pr merge --help'
+g permite 'gh pr merge 101 --help'
+g permite 'git add .claude/settings.local.example.json'
+g permite 'set -e'
+g permite 'export FOO=1'
+g permite 'declare -a lista'
+g permite 'git config --get user.name'
+
+echo "== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso"
+# variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
+variante_identidad() {
+  variante "$1"
+  cp "$hooks/../rutas-gobierno.txt" "$tmp/reglas/$1/.claude/" 2>/dev/null
+  printf '%s\n' "$2" > "$tmp/reglas/$1/.claude/identidad-agente.txt"
+}
+talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot
+  GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+extra_path="$tmp/gh-falso:"
+variante_identidad identidad talos-bot
+echo "-- sin la identidad de talos-bot"
+extra_env=()
+g bloquea 'git commit -m x' 'identidad de talos-bot'
+g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
+g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot'
+g bloquea 'gh pr merge 101 --squash' 'identidad de talos-bot'
+g bloquea 'gh pr comment 101 --body x' 'identidad de talos-bot'
+g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' 'identidad de talos-bot'
+g bloquea 'gh api graphql -f query=x' 'identidad de talos-bot'
+g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' 'identidad de talos-bot'
+g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot'
+g permite 'git status'
+g permite 'git log --oneline -3'
+g permite 'gh pr view 101'
+g permite 'gh api repos/{owner}/{repo}/pulls/5'
+g permite 'gh api -X GET repos/{owner}/{repo}/pulls/5'
+g permite 'gh pr merge --help'
+echo "-- con la identidad de talos-bot"
+extra_env=("${talos_env[@]}")
+g permite 'git commit -m x'
+g permite 'git push -u origin feat/x'
+g permite 'gh pr create --title x --body y'
+g permite 'gh pr merge 101 --squash'
+g permite 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x'
+g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
+echo "-- identidad incompleta o de otra cuenta"
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=leon2995 FAKE_GH_LOGIN=talos-bot)
+g bloquea 'git commit -m x' 'identidad de talos-bot'
+extra_env=(GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+g bloquea 'git commit -m x' 'identidad de talos-bot'
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=leon2995)
+g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
+g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot'
+g permite 'git commit -m x'
+variante_identidad identidad-vacia ''
+extra_env=("${talos_env[@]}")
+g bloquea 'git commit -m x' 'identidad-agente.txt'
+extra_env=()
+hooks_alt=""
+extra_path=""
+echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot"
+g permite 'git commit -m x'
+g permite 'git push -u origin feat/x'
+
+echo "== CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)"
+# recortar <texto>: sin \r ni espacios al inicio y al final.
+recortar() {
+  local s=${1//$'\r'/}
+  s="${s#"${s%%[![:space:]]*}"}"
+  printf '%s' "${s%"${s##*[![:space:]]}"}"
+}
+# reglas_a_codeowners <rutas-gobierno.txt>: imprime el patrón de CODEOWNERS de cada regla, con la
+# misma cobertura. Falla si una regla no tiene traducción fiel (comodines o **/ con barra interna).
+reglas_a_codeowners() {
+  local r x
+  while IFS= read -r r || [ -n "$r" ]; do
+    r=$(recortar "$r")
+    case "$r" in ''|'#'*) continue ;; esac
+    case "${r#\*\*/}" in *'*'*) return 1 ;; esac
+    case "$r" in
+      '**/'*) x=${r#\*\*/}; case "${x%/}" in */*|'') return 1 ;; esac; printf '%s\n' "$x" ;;
+      *) printf '/%s\n' "$r" ;;
+    esac
+  done < "$1"
+}
+# codeowners_patrones <CODEOWNERS>: imprime los patrones; falla si una línea no tiene exactamente
+# el dueño @leon2995.
+codeowners_patrones() {
+  local l p d resto
+  while IFS= read -r l || [ -n "$l" ]; do
+    l=$(recortar "$l")
+    case "$l" in ''|'#'*) continue ;; esac
+    read -r p d resto <<< "$l"
+    { [ "$d" = "@leon2995" ] && [ -z "$resto" ]; } || return 1
+    printf '%s\n' "$p"
+  done < "$1"
+}
+# comparar_codeowners <rutas-gobierno.txt> <CODEOWNERS>: sale con 0 si cubren lo mismo.
+comparar_codeowners() {
+  local esperado actual
+  [ -f "$1" ] && [ -f "$2" ] || return 1
+  esperado=$(reglas_a_codeowners "$1" | sort) || return 1
+  actual=$(codeowners_patrones "$2" | sort) || return 1
+  [ -n "$esperado" ] && [ "$esperado" = "$actual" ]
+}
+reglas="$repo/.claude/rutas-gobierno.txt"
+co="$repo/.github/CODEOWNERS"
+v="$tmp/codeowners"
+mkdir -p "$v"
+chequeo pasa 'el CODEOWNERS del repo coincide con rutas-gobierno.txt' comparar_codeowners "$reglas" "$co"
+grep -v 'CLAUDE.md' "$co" > "$v/falta" 2>/dev/null
+chequeo falla 'CODEOWNERS al que le falta una regla' comparar_codeowners "$reglas" "$v/falta"
+{ cat "$co" 2>/dev/null; echo '/docs/ @leon2995'; } > "$v/sobra"
+chequeo falla 'CODEOWNERS con una regla de más' comparar_codeowners "$reglas" "$v/sobra"
+sed 's/@leon2995/@otro/' "$co" > "$v/otro" 2>/dev/null
+chequeo falla 'CODEOWNERS con otro dueño' comparar_codeowners "$reglas" "$v/otro"
+sed 's/@leon2995/@leon2995 @otro/' "$co" > "$v/dos" 2>/dev/null
+chequeo falla 'CODEOWNERS con dos dueños' comparar_codeowners "$reglas" "$v/dos"
+sed 's#^\.claude/#/.claude/#' "$co" > "$v/anclado" 2>/dev/null
+chequeo falla 'CODEOWNERS con .claude/ anclado a la raíz' comparar_codeowners "$reglas" "$v/anclado"
+awk '{ printf "%s\r\n", $0 }' "$co" > "$v/crlf" 2>/dev/null
+chequeo pasa 'CODEOWNERS con CRLF' comparar_codeowners "$reglas" "$v/crlf"
+: > "$v/vacio"
+chequeo falla 'CODEOWNERS vacío' comparar_codeowners "$reglas" "$v/vacio"
+chequeo falla 'CODEOWNERS ausente' comparar_codeowners "$reglas" "$v/no-existe"
+printf '**/CLAUDE.md\n**/docs/adr/\n' > "$v/reglas-barra-dir"
+chequeo falla 'regla **/X/ con barra interna' comparar_codeowners "$v/reglas-barra-dir" "$co"
+printf '**/a/CLAUDE.md\n' > "$v/reglas-barra-archivo"
+chequeo falla 'regla **/X con barra interna' comparar_codeowners "$v/reglas-barra-archivo" "$co"
+printf '# solo comentarios\n' > "$v/reglas-vacias"
+chequeo falla 'rutas-gobierno.txt sin reglas' comparar_codeowners "$v/reglas-vacias" "$v/vacio"
+
+echo "== configuración: settings.json, .gitignore, plantilla y CI (C2, C5)"
+s="$repo/.claude/settings.json"
+# deniega <regla>: la regla está en permissions.deny de settings.json.
+deniega() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -e --arg r "$1" '.permissions.deny | index($r) != null' "$s"
+  else
+    grep -qF "\"$1\"" "$s"
+  fi
+}
+for regla in 'PowerShell' 'Read(./.claude/settings.local.json)' 'Read(**/.claude/settings.local.json)' \
+  'Edit(./.claude/settings.local.json)' 'Edit(**/.claude/settings.local.json)' \
+  'Write(./.claude/settings.local.json)' 'Write(**/.claude/settings.local.json)' \
+  'Read(~/.talos-gh/**)' 'Edit(~/.talos-gh/**)' 'Write(~/.talos-gh/**)'; do
+  chequeo pasa "settings.json deniega $regla" deniega "$regla"
+done
+tiene_linea() { tr -d '\r' < "$2" | grep -qxF "$1"; }
+chequeo pasa '.gitignore ignora .claude/settings.local.json' tiene_linea '.claude/settings.local.json' "$repo/.gitignore"
+p="$repo/.claude/settings.local.example.json"
+if command -v jq >/dev/null 2>&1; then
+  campo() { [ "$(jq -r --arg k "$1" '.env[$k] // "__falta__"' "$p")" = "$2" ]; }
+  termina() { case "$(jq -r --arg k "$1" '.env[$k] // ""' "$p")" in *"$2") return 0 ;; esac; return 1; }
+  chequeo pasa 'la plantilla es JSON válido' jq -e . "$p"
+  chequeo pasa 'la plantilla apunta GH_CONFIG_DIR a ~/.talos-gh' termina GH_CONFIG_DIR '/.talos-gh'
+  chequeo pasa 'la plantilla fija GIT_CONFIG_COUNT en 2' campo GIT_CONFIG_COUNT 2
+  chequeo pasa 'la plantilla fija GIT_CONFIG_KEY_0' campo GIT_CONFIG_KEY_0 'credential.https://github.com.helper'
+  chequeo pasa 'la plantilla vacía el helper con GIT_CONFIG_VALUE_0' campo GIT_CONFIG_VALUE_0 ''
+  chequeo pasa 'la plantilla fija GIT_CONFIG_KEY_1' campo GIT_CONFIG_KEY_1 'credential.https://github.com.helper'
+  chequeo pasa 'la plantilla usa gh como helper en GIT_CONFIG_VALUE_1' campo GIT_CONFIG_VALUE_1 '!gh auth git-credential'
+  chequeo pasa 'la plantilla fija el autor talos-bot' campo GIT_AUTHOR_NAME talos-bot
+  chequeo pasa 'la plantilla fija el committer talos-bot' campo GIT_COMMITTER_NAME talos-bot
+  chequeo pasa 'la plantilla usa el email noreply del autor' termina GIT_AUTHOR_EMAIL '+talos-bot@users.noreply.github.com'
+  chequeo pasa 'la plantilla usa el email noreply del committer' termina GIT_COMMITTER_EMAIL '+talos-bot@users.noreply.github.com'
+else
+  echo "omitido: jq no está instalado (chequeos de la plantilla)"
+fi
+chequeo falla 'la plantilla no trae prefijos de token' grep -qE 'ghp_|gho_|ghu_|ghs_|ghr_|github_pat_' "$p"
+ci="$repo/.github/workflows/ci.yml"
+chequeo pasa 'CI tiene el job hooks' grep -qE '^  hooks:' "$ci"
+chequeo pasa 'el job hooks corre la suite' grep -qF 'bash scripts/test-hooks.sh' "$ci"
+chequeo pasa 'CI corre en push a feat/**' grep -qF "'feat/**'" "$ci"
+chequeo pasa 'CI corre en push a fix/**' grep -qF "'fix/**'" "$ci"
 
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }
