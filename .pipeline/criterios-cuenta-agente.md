@@ -35,7 +35,7 @@ Verificación posterior al PASS (fuera de los criterios del auditor): pasos a a 
 - b. Invitarla como colaboradora de `leon2995/pipeline-prueba` y aceptar desde `talos-bot`.
 - d. Mergear T1 a `staging` y después `staging` → `main` (el agente todavía trabaja como `leon2995`; con 0 aprobaciones Leonardo mergea). CODEOWNERS y el job `hooks` quedan en las dos ramas base.
 - e. Correr los comandos `gh api` de `SETUP.md` y volver a correr el CI de los PRs abiertos. No correr el pipeline entre e y f.
-- c. Crear en `talos-bot` un token classic (`public_repo`, `workflow`, con vencimiento) e iniciar sesión de forma interactiva con `--insecure-storage` en `~/.talos-gh`. Verificar las dos identidades. Anotar la fecha de vencimiento.
+- c. Crear en `talos-bot` un token classic (`repo`, `read:org` y `workflow`, con vencimiento) e iniciar sesión de forma interactiva con `--insecure-storage` en `~/.talos-gh`. Verificar las dos identidades. Anotar la fecha de vencimiento.
 - f. Crear o fusionar `.claude/settings.local.json` desde la plantilla (sin token) y reiniciar la sesión. Desde aquí el agente trabaja como `talos-bot`.
 - g. Activación y verificación conjunta: `talos-bot` abre un PR sin rutas de gobierno con la fecha de vencimiento en `SETUP.md` (el CTO lo mergea a `staging` con 0 aprobaciones) y otro PR de gobierno que crea `.claude/identidad-agente.txt` (debe quedar bloqueado hasta la aprobación de Leonardo como code owner; él aprueba y mergea). Con ese archivo en `staging`, la identidad pasa a ser obligatoria (C4).
 

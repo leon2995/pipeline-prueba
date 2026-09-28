@@ -21,7 +21,7 @@ railway setup agent -y # instala skills y MCP de Railway para Claude Code y Code
 npm i -g @openai/codex
 codex login            # elige "Sign in with ChatGPT"
 
-# jq (opcional: si falta, los hooks usan python3)
+# jq (si falta, los hooks usan python3; scripts/test-hooks.sh lo exige)
 brew install jq        # o: sudo apt install jq
 ```
 
