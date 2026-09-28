@@ -8,7 +8,7 @@ ok=0
 fallos=0
 extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas o un gh falso
 hooks_alt=""    # si no está vacío, se corre el hook de este directorio (copia) en lugar del base
-extra_env=()    # variables de entorno para el hook (por ejemplo la identidad de talos-bot)
+extra_env=()    # variables de entorno para el hook (por ejemplo la identidad de talos-bot-leon)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 # La suite corre sobre una copia de los hooks y de rutas-gobierno.txt, sin identidad-agente.txt:
@@ -435,47 +435,47 @@ g permite 'printenv -0 PATH'
 g permite 'env LC_ALL=C sed -i s/a/b/ f'
 g permite 'env LANG=C sort -'
 
-echo "== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso"
+echo "== guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
 variante_identidad() {
   variante "$1"
   cp "$hooks/../rutas-gobierno.txt" "$tmp/reglas/$1/.claude/" 2>/dev/null
   printf '%s\n' "$2" > "$tmp/reglas/$1/.claude/identidad-agente.txt"
 }
-# Identidad completa de talos-bot, igual que la plantilla (sin token: el gh falso responde api user).
+# Identidad completa de talos-bot-leon, igual que la plantilla (sin token: el gh falso responde api user).
 clave_helper='credential.https://github.com.helper'
 talos_git=(GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
   "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
-talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot
-  GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon
+  GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
 extra_path="$tmp/gh-falso:"
-variante_identidad identidad talos-bot
-echo "-- sin la identidad de talos-bot"
+variante_identidad identidad talos-bot-leon
+echo "-- sin la identidad de talos-bot-leon"
 extra_env=()
-g bloquea 'git commit -m x' 'identidad de talos-bot'
-g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
-g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot'
-g bloquea 'gh pr merge 101 --squash' 'identidad de talos-bot'
-g bloquea 'gh pr comment 101 --body x' 'identidad de talos-bot'
-g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' 'identidad de talos-bot'
-g bloquea 'gh api graphql -f query=x' 'identidad de talos-bot'
-g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' 'identidad de talos-bot'
-g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot'
-g bloquea 'gh pr create --title x --body y; gh pr view --help' 'identidad de talos-bot'
-g bloquea 'gh pr new --fill' 'identidad de talos-bot'
-g bloquea 'gh -R leon2995/pipeline-prueba pr create --title x --body y' 'identidad de talos-bot'
-g bloquea 'gh pr -R leon2995/pipeline-prueba edit 5 --title x' 'identidad de talos-bot'
-g bloquea 'gh pr edit 5 --title x' 'identidad de talos-bot'
-g bloquea 'gh pr close 5' 'identidad de talos-bot'
-g bloquea 'gh pr reopen 5' 'identidad de talos-bot'
-g bloquea 'gh pr ready 5' 'identidad de talos-bot'
-g bloquea 'gh pr review 5 --comment -b x' 'identidad de talos-bot'
-g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE' 'identidad de talos-bot'
-g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET' 'identidad de talos-bot'
-g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' 'identidad de talos-bot'
-g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot'
-g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' 'identidad de talos-bot'
-g bloquea 'git -C . push -u origin feat/x' 'identidad de talos-bot'
+g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
+g bloquea 'git push -u origin feat/x' 'identidad de talos-bot-leon'
+g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot-leon'
+g bloquea 'gh pr merge 101 --squash' 'identidad de talos-bot-leon'
+g bloquea 'gh pr comment 101 --body x' 'identidad de talos-bot-leon'
+g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' 'identidad de talos-bot-leon'
+g bloquea 'gh api graphql -f query=x' 'identidad de talos-bot-leon'
+g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' 'identidad de talos-bot-leon'
+g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot-leon'
+g bloquea 'gh pr create --title x --body y; gh pr view --help' 'identidad de talos-bot-leon'
+g bloquea 'gh pr new --fill' 'identidad de talos-bot-leon'
+g bloquea 'gh -R leon2995/pipeline-prueba pr create --title x --body y' 'identidad de talos-bot-leon'
+g bloquea 'gh pr -R leon2995/pipeline-prueba edit 5 --title x' 'identidad de talos-bot-leon'
+g bloquea 'gh pr edit 5 --title x' 'identidad de talos-bot-leon'
+g bloquea 'gh pr close 5' 'identidad de talos-bot-leon'
+g bloquea 'gh pr reopen 5' 'identidad de talos-bot-leon'
+g bloquea 'gh pr ready 5' 'identidad de talos-bot-leon'
+g bloquea 'gh pr review 5 --comment -b x' 'identidad de talos-bot-leon'
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE' 'identidad de talos-bot-leon'
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET' 'identidad de talos-bot-leon'
+g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' 'identidad de talos-bot-leon'
+g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot-leon'
+g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' 'identidad de talos-bot-leon'
+g bloquea 'git -C . push -u origin feat/x' 'identidad de talos-bot-leon'
 g permite 'gh api -XGET repos/{owner}/{repo}/pulls/5'
 g permite 'gh api --method=GET repos/{owner}/{repo}/pulls/5'
 g permite 'git status'
@@ -484,9 +484,9 @@ g permite 'gh pr view 101'
 g permite 'gh api repos/{owner}/{repo}/pulls/5'
 g permite 'gh api -X GET repos/{owner}/{repo}/pulls/5'
 g permite 'gh pr merge --help'
-g bloquea 'gh pr create --title "T3: soporte de --help" --body-file b.md' 'identidad de talos-bot'
-g bloquea "gh pr comment 5 --body 'usa -h para ver opciones'" 'identidad de talos-bot'
-echo "-- con la identidad de talos-bot"
+g bloquea 'gh pr create --title "T3: soporte de --help" --body-file b.md' 'identidad de talos-bot-leon'
+g bloquea "gh pr comment 5 --body 'usa -h para ver opciones'" 'identidad de talos-bot-leon'
+echo "-- con la identidad de talos-bot-leon"
 extra_env=("${talos_env[@]}")
 g permite 'git commit -m x'
 g permite 'git push -u origin feat/x'
@@ -501,15 +501,15 @@ g bloquea 'git push git@github.com:leon2995/pipeline-prueba.git feat/x' 'no es H
 g bloquea 'git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x' 'no es HTTPS'
 g bloquea 'git push --repo=origin feat/x' '--repo'
 echo "-- identidad incompleta o de otra cuenta"
-talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=leon2995 GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
-g bloquea 'git commit -m x' 'identidad de talos-bot'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=leon2995 FAKE_GH_LOGIN=talos-bot)
-g bloquea 'git commit -m x' 'identidad de talos-bot'
-extra_env=("${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
-g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
+talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=leon2995 GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
+g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=leon2995 FAKE_GH_LOGIN=talos-bot-leon)
+g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
+extra_env=("${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
+g bloquea 'git push -u origin feat/x' 'identidad de talos-bot-leon'
 extra_env=("${talos_base[@]}")
-g bloquea 'git commit -m x' 'identidad de talos-bot'
+g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=manager)
 g bloquea 'git push -u origin feat/x' 'plantilla'
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
@@ -517,7 +517,7 @@ extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper
 g bloquea 'git push -u origin feat/x' 'plantilla'
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
 g bloquea 'git push -u origin feat/x' 'plantilla'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=leon2995)
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=leon2995)
 g bloquea 'git push -u origin feat/x' 'GitHub responde como leon2995'
 g bloquea 'gh pr create --title x --body y' 'GitHub responde como leon2995'
 g permite 'git commit -m x'
@@ -527,7 +527,7 @@ g bloquea 'git commit -m x' 'identidad-agente.txt'
 extra_env=()
 hooks_alt=""
 extra_path=""
-echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot"
+echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot-leon"
 g permite 'git commit -m x'
 g permite 'git push -u origin feat/x'
 
@@ -630,10 +630,10 @@ if command -v jq >/dev/null 2>&1; then
   chequeo pasa 'la plantilla vacía el helper con GIT_CONFIG_VALUE_0' campo GIT_CONFIG_VALUE_0 ''
   chequeo pasa 'la plantilla fija GIT_CONFIG_KEY_1' campo GIT_CONFIG_KEY_1 'credential.https://github.com.helper'
   chequeo pasa 'la plantilla usa gh como helper en GIT_CONFIG_VALUE_1' campo GIT_CONFIG_VALUE_1 '!gh auth git-credential'
-  chequeo pasa 'la plantilla fija el autor talos-bot' campo GIT_AUTHOR_NAME talos-bot
-  chequeo pasa 'la plantilla fija el committer talos-bot' campo GIT_COMMITTER_NAME talos-bot
-  chequeo pasa 'la plantilla usa el email noreply del autor' termina GIT_AUTHOR_EMAIL '+talos-bot@users.noreply.github.com'
-  chequeo pasa 'la plantilla usa el email noreply del committer' termina GIT_COMMITTER_EMAIL '+talos-bot@users.noreply.github.com'
+  chequeo pasa 'la plantilla fija el autor talos-bot-leon' campo GIT_AUTHOR_NAME talos-bot-leon
+  chequeo pasa 'la plantilla fija el committer talos-bot-leon' campo GIT_COMMITTER_NAME talos-bot-leon
+  chequeo pasa 'la plantilla usa el email noreply del autor' campo GIT_AUTHOR_EMAIL '335185800+talos-bot-leon@users.noreply.github.com'
+  chequeo pasa 'la plantilla usa el email noreply del committer' campo GIT_COMMITTER_EMAIL '335185800+talos-bot-leon@users.noreply.github.com'
 fi
 chequeo falla 'la plantilla no trae prefijos de token' grep -qE 'ghp_|gho_|ghu_|ghs_|ghr_|github_pat_' "$p"
 ci="$repo/.github/workflows/ci.yml"
