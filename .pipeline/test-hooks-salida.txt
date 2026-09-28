@@ -275,9 +275,9 @@ ok     permite  printenv PATH
 ok     permite  printenv -0 PATH
 ok     permite  env LC_ALL=C sed -i s/a/b/ f
 ok     permite  env LANG=C sort -
-== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
+== guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso
 -- identidad
--- sin la identidad de talos-bot
+-- sin la identidad de talos-bot-leon
 ok     bloquea  git commit -m x
 ok     bloquea  git push -u origin feat/x
 ok     bloquea  gh pr create --title x --body y
@@ -312,7 +312,7 @@ ok     permite  gh api -X GET repos/{owner}/{repo}/pulls/5
 ok     permite  gh pr merge --help
 ok     bloquea  gh pr create --title "T3: soporte de --help" --body-file b.md
 ok     bloquea  gh pr comment 5 --body 'usa -h para ver opciones'
--- con la identidad de talos-bot
+-- con la identidad de talos-bot-leon
 ok     permite  git commit -m x
 ok     permite  git push -u origin feat/x
 ok     permite  gh pr create --title x --body y
@@ -338,7 +338,7 @@ ok     bloquea  gh pr create --title x --body y
 ok     permite  git commit -m x
 -- identidad-vacia
 ok     bloquea  git commit -m x
--- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot
+-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot-leon
 ok     permite  git commit -m x
 ok     permite  git push -u origin feat/x
 == CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)
@@ -374,8 +374,8 @@ ok     pasa     la plantilla fija GIT_CONFIG_KEY_0
 ok     pasa     la plantilla vacía el helper con GIT_CONFIG_VALUE_0
 ok     pasa     la plantilla fija GIT_CONFIG_KEY_1
 ok     pasa     la plantilla usa gh como helper en GIT_CONFIG_VALUE_1
-ok     pasa     la plantilla fija el autor talos-bot
-ok     pasa     la plantilla fija el committer talos-bot
+ok     pasa     la plantilla fija el autor talos-bot-leon
+ok     pasa     la plantilla fija el committer talos-bot-leon
 ok     pasa     la plantilla usa el email noreply del autor
 ok     pasa     la plantilla usa el email noreply del committer
 ok     falla    la plantilla no trae prefijos de token
