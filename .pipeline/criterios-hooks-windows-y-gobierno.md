@@ -55,6 +55,16 @@ Verificación posterior al PASS (fuera de los criterios del auditor): PR contra 
 13. Los casos nuevos de merge y flags comprueban también que stderr nombre el motivo (la ruta de gobierno, "borrar ramas", "un merge por comando", "lista incompleta", etc.), no solo el código de salida.
 14. Evidencia con `gh` real: stderr completo de `gh pr merge 1` y `gh pr merge 2`, que debe nombrar una ruta concreta del PR (prueba que las dos consultas reales funcionaron); y un permitido real sin mergear: copia del hook con un `rutas-gobierno.txt` de una sola regla que no aplica (`nada/`) y `gh pr merge 1` por stdin, que debe salir con 0.
 
+### Intento 2 (JEV devolvió FIX en el intento 1: Claude fail con 1 alta, 1 media y 1 baja; Codex fail con 3 altas y 1 media)
+
+15. Número de PR explícito: sin número, `gh pr view` resolvería el PR de la rama actual en el momento del hook, que puede no ser el que se mergea (`git switch fix/gobierno && gh pr merge --squash`). Si el objetivo no es un número, se bloquea con "indica el número del PR". La Fase 4 de `CLAUDE.md` pasa a `gh pr merge <n> --squash`.
+16. Redirecciones: antes de leer los argumentos se normalizan `2>&1`, `>&2`, `&>` y `>|`, y en el bucle se descartan los tokens de redirección con su destino (`2>/dev/null`, `> log.txt`, `>log.txt`).
+17. Separadores entre comillas: el texto de `gh pr merge` se corta en el primer `;`, `&`, `|` o salto de línea fuera de comillas y sin escapar (`--body "R&D; listo"` ya no se corta).
+18. Formas con `=`: `--admin=*` bloquea igual que `--admin`. En los grupos cortos se quita el `=valor` antes de mirar las letras: `-d=true` y `-sd=true` bloquean.
+19. Grupos cortos con valor: `d` y `R` se buscan solo en las letras anteriores al primer flag que lleva valor (`A`, `b`, `F`, `t`, `R`); lo que sigue a ese flag es su valor (`-tdocs` es el asunto "docs", no un borrado). `R` como flag con valor bloquea (otro repositorio).
+20. C2: `only-acceptance-tests.sh` recibe los mismos casos de rutas Windows que `protect-acceptance-tests.sh` (`.claude/`, `CLAUDE.md`, `LESSONS.md`, `docs/adr/`, `.github/workflows/` bloquean).
+21. Límite conocido que se deja documentado en el hook: el texto `gh pr merge` dentro de un `--body` cuenta como segundo merge y bloquea con "un merge por comando" (conservador).
+
 **Consecuencia declarada (decisión pendiente de Leonardo):** `**/LESSONS.md` es ruta de gobierno y la Fase 3 paso 5 agrega `new_lesson` a `LESSONS.md` dentro de la subtarea. Todo PR de subtarea con lección nueva lo mergeará Leonardo. La alternativa es juntar las lecciones en PRs aparte; eso cambia el protocolo y no está en este PR.
 
 Fuera de alcance (modelo de amenaza): `..` en rutas, mayúsculas en rutas Windows, `gh api` o la web para mergear, flags con valor que confunden la detección del número de PR (terminan en `gh` fallando y bloqueando).

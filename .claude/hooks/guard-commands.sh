@@ -151,21 +151,59 @@ if printf '%s' "$cmd" | grep -Eq '^railway variables' && ! printf '%s' "$cmd" | 
   echo "Bloqueado: 'railway variables' solo se permite listando nombres, por ejemplo: railway variables --kv | cut -d= -f1" >&2
   exit 2
 fi
-# gh pr merge: solo a staging, un merge por comando, sin --admin, --auto ni borrar la rama, y
-# nunca un PR que toque (modifique, borre o renombre) una ruta de .claude/rutas-gobierno.txt:
-# esos los mergea Leonardo, también a staging. Si algo no se puede verificar, se bloquea.
-if printf '%s' "$cmd" | grep -Eq '(^|[;&| ])gh pr merge'; then
+# gh pr merge: solo a staging, con número de PR explícito, un merge por comando, sin --admin,
+# --auto ni borrar la rama, y nunca un PR que toque (modifique, borre o renombre) una ruta de
+# .claude/rutas-gobierno.txt: esos los mergea Leonardo, también a staging. Si algo no se puede
+# verificar, se bloquea. Límite conocido y conservador: el texto "gh pr merge" dentro de un
+# --body cuenta como un segundo merge y bloquea.
+# Detección amplia: gh pr merge con flags (y sus valores) entre gh, pr y merge, espacios de más,
+# o dentro de ( ) o `...`. Un "merge" en el texto de otro subcomando (gh pr create --title
+# "fix merge") no cuenta, porque entre pr y merge solo se admiten flags.
+patron_merge='(^|[;&|( `])gh( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +pr( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +merge([^[:alnum:]_-]|$)'
+if printf '%s\n' "$cmd" | grep -Eq "$patron_merge"; then
   bloquear() { echo "Bloqueado por protocolo: $1" >&2; exit 2; }
   minusculas() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+  # cortar <texto>: imprime el texto hasta el primer ; & | o salto de línea que esté fuera de
+  # comillas y sin escapar (un --body "R&D; listo" no corta el comando).
+  cortar() {
+    local s=$1 out="" q="" c i=0 n=${#1}
+    while [ "$i" -lt "$n" ]; do
+      c=${s:i:1}
+      if [ "$q" = "'" ]; then
+        [ "$c" = "'" ] && q=""
+      elif [ "$q" = '"' ]; then
+        if [ "$c" = '\' ]; then out+=$c; i=$((i + 1)); c=${s:i:1}
+        elif [ "$c" = '"' ]; then q=""; fi
+      else
+        case "$c" in
+          "'"|'"') q=$c ;;
+          '\') out+=$c; i=$((i + 1)); c=${s:i:1} ;;
+          ';'|'&'|'|'|$'\n') break ;;
+          '#') { [ -z "$out" ] || [[ "$out" == *[[:space:]] ]]; } && break ;;   # comentario
+        esac
+      fi
+      out+=$c
+      i=$((i + 1))
+    done
+    printf '%s' "$out"
+  }
 
-  merges=$(printf '%s\n' "$cmd" | grep -Eo '(^|[;&| ])gh pr merge' | wc -l)
-  [ $((merges)) -gt 1 ] && bloquear "un merge por comando. Corre cada gh pr merge por separado."
+  estrictos=$(printf '%s\n' "$cmd" | grep -Eo '(^|[;&|( `])gh pr merge' | wc -l)
+  amplios=$(printf '%s\n' "$cmd" | grep -Eo "$patron_merge" | wc -l)
+  if [ $((estrictos)) -gt 1 ] || [ $((amplios)) -gt 1 ]; then
+    bloquear "un merge por comando. Corre cada gh pr merge por separado."
+  fi
+  [ $((estrictos)) -eq 1 ] ||
+    bloquear "escribe el merge como gh pr merge <n> --squash, sin nada entre gh, pr y merge."
+  case "$cmd" in
+    *GH_REPO=*|*GH_HOST=*) bloquear "gh pr merge con GH_REPO o GH_HOST: apunta a otro repositorio o servidor." ;;
+  esac
 
-  # Argumentos hasta el primer ; & | o salto de línea, separados respetando comillas con xargs
-  # (no ejecuta nada). Comillas sin cerrar: no se pueden leer, se bloquea.
-  resto=${cmd#*gh pr merge}
-  resto=${resto%%[;&|]*}
-  resto=${resto%%$'\n'*}
+  # Argumentos: se normalizan las redirecciones con & (2>&1, >&2, &>, >|), se corta en el primer
+  # separador fuera de comillas y se separan respetando comillas con xargs (no ejecuta nada).
+  # Comillas sin cerrar: no se pueden leer, se bloquea.
+  resto=$(printf '%s' "${cmd#*gh pr merge}" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g')
+  resto=$(cortar "$resto")
   args=()
   if [ -n "${resto//[[:space:]]/}" ]; then
     lista=$(printf '%s' "$resto" | xargs -n1 printf '%s\n' 2>/dev/null) ||
@@ -173,29 +211,38 @@ if printf '%s' "$cmd" | grep -Eq '(^|[;&| ])gh pr merge'; then
     while IFS= read -r a; do args+=("$a"); done <<< "$lista"
   fi
 
-  # Flags: se saltan los valores de los que llevan uno; el resto es el número (o rama) del PR.
+  # Flags: se saltan los valores de los que llevan uno y las redirecciones; lo que queda es el PR.
   target="" posicionales=0 salta=0
   for a in ${args[@]+"${args[@]}"}; do
     if [ "$salta" = 1 ]; then salta=0; continue; fi
     case "$a" in
-      --admin) bloquear "--admin salta las protecciones de rama." ;;
+      [0-9]*[\<\>]*|[\<\>]*)              # redirección: >archivo, 2>err, o el operador solo
+        case "$a" in *[!0-9\<\>]*) ;; *) salta=1 ;; esac ;;
+      --admin|--admin=*) bloquear "--admin salta las protecciones de rama." ;;
       --auto|--auto=*) bloquear "sin --auto: GitHub mergearía después, con un estado del PR que este hook no revisó. Mergea cuando CI esté en verde." ;;
       --delete-branch|--delete-branch=*) echo "$msg_borrado" >&2; exit 2 ;;
       --repo|--repo=*) bloquear "gh pr merge en otro repositorio (-R/--repo)." ;;
       --author-email|--body|--body-file|--match-head-commit|--subject) salta=1 ;;
       --*) ;;
       -*)
-        case "$a" in
-          -R*) bloquear "gh pr merge en otro repositorio (-R/--repo)." ;;
-          -*[!A-Za-z]*) ;;                  # flag corto con valor pegado (-t7, -Fnotas.md)
-          *R*) bloquear "gh pr merge en otro repositorio (-R/--repo)." ;;
-          *d*) echo "$msg_borrado" >&2; exit 2 ;;
-          *[AbFt]) salta=1 ;;               # el último flag corto del grupo espera un valor
-        esac ;;
+        # Grupo de flags cortos: sin el =valor, las letras antes del primer flag que lleva valor
+        # (A, b, F, t, R) son booleanos; lo que sigue a ese flag es su valor (-tdocs, -t7).
+        grupo=${a#-}
+        grupo=${grupo%%=*}
+        booleanos=${grupo%%[AbFtR]*}
+        case "$booleanos" in *d*) echo "$msg_borrado" >&2; exit 2 ;; esac
+        if [ "$booleanos" != "$grupo" ]; then
+          [ "${grupo:${#booleanos}:1}" = R ] && bloquear "gh pr merge en otro repositorio (-R/--repo)."
+          # El valor va en el token siguiente si el flag con valor cierra el grupo y no hay =.
+          [ "${#grupo}" -eq $((${#booleanos} + 1)) ] && [ "$a" = "${a%%=*}" ] && salta=1
+        fi ;;
       *) posicionales=$((posicionales + 1)); target=$a ;;
     esac
   done
   [ "$posicionales" -gt 1 ] && bloquear "no pude identificar un único PR en gh pr merge ($posicionales argumentos sin flag)."
+  case "$target" in
+    ''|*[!0-9]*) bloquear "indica el número del PR: gh pr merge <n> --squash. Sin número (o con una rama o URL), el hook revisaría otro PR que el que se mergea." ;;
+  esac
 
   # Reglas de .claude/rutas-gobierno.txt (formato explicado en el propio archivo).
   archivo_reglas="$(dirname "$0")/../rutas-gobierno.txt"
