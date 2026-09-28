@@ -4,15 +4,15 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 
 ## Roles
 
-| Rol | Quién | Qué ve |
-|---|---|---|
-| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo |
-| test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan |
-| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md |
-| auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md |
-| Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Pro, modelo `gpt-5.6-terra` con esfuerzo `ultra`) | Solo criterios y diff |
-| JEV (router) | `scripts/jev.py` | Veredictos. Determinista, sin LLM |
-| Humano | Leonardo | Aprueba la propuesta y mergea el PR a `main` |
+| Rol | Quién | Qué ve | Modelo y esfuerzo |
+|---|---|---|---|
+| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`) con ultracode (`"ultracode": true` en `.claude/settings.json`) |
+| test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan | Sonnet (`sonnet`), esfuerzo alto (`effort: high`) |
+| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md | Hereda modelo y esfuerzo de la sesión (`model: inherit`, sin `effort`) |
+| auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md | Opus 5.5 (`claude-opus-5-5`), esfuerzo alto (`effort: high`) |
+| Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Business) | Solo criterios y diff | `gpt-5.6-sol`, esfuerzo alto (`model_reasoning_effort="high"`) |
+| JEV (router) | `scripts/jev.py` | Veredictos. Determinista, sin LLM | No aplica |
+| Humano | Leonardo | Aprueba la propuesta y mergea el PR a `main` | No aplica |
 
 Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo que su fila indica, por escrito, dentro del prompt de delegación. Si necesitas que sepa algo más, escríbelo en el prompt; nunca asumas que lo sabe.
 
