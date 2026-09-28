@@ -3,6 +3,7 @@ name: test-writer
 description: Escribe tests de aceptación en tests/acceptance/ a partir de criterios numerados, antes de que exista la implementación. Úsalo al inicio de cada subtarea.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
+effort: high
 permissionMode: acceptEdits
 maxTurns: 30
 hooks:
