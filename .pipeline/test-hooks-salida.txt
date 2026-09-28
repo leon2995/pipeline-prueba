@@ -236,6 +236,7 @@ ok     bloquea  env -u FOO
 ok     bloquea  env LANG=C
 ok     bloquea  gh --hostname github.com auth token
 ok     bloquea  gh auth --hostname github.com status -t
+ok     bloquea  gh config get -h github.com oauth_token
 == guard-commands.sh: cambio de identidad (bloquea)
 ok     bloquea  gh auth login
 ok     bloquea  gh auth logout
@@ -271,6 +272,9 @@ ok     permite  git config --get user.name
 ok     permite  env LANG=C sort
 ok     permite  env -u FOO python x.py
 ok     permite  printenv PATH
+ok     permite  printenv -0 PATH
+ok     permite  env LC_ALL=C sed -i s/a/b/ f
+ok     permite  env LANG=C sort -
 == guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
 -- identidad
 -- sin la identidad de talos-bot
@@ -306,6 +310,8 @@ ok     permite  gh pr view 101
 ok     permite  gh api repos/{owner}/{repo}/pulls/5
 ok     permite  gh api -X GET repos/{owner}/{repo}/pulls/5
 ok     permite  gh pr merge --help
+ok     bloquea  gh pr create --title "T3: soporte de --help" --body-file b.md
+ok     bloquea  gh pr comment 5 --body 'usa -h para ver opciones'
 -- con la identidad de talos-bot
 ok     permite  git commit -m x
 ok     permite  git push -u origin feat/x
@@ -313,11 +319,20 @@ ok     permite  gh pr create --title x --body y
 ok     permite  gh pr merge 101 --squash
 ok     permite  gh api repos/{owner}/{repo}/issues/5/comments -f body=x
 ok     permite  gh -R leon2995/pipeline-prueba pr create --title x --body y
+ok     permite  git push https://github.com/leon2995/pipeline-prueba.git feat/x
 ok     bloquea  gh pr merge 102 --squash
+ok     bloquea  git push -u remoto-inexistente feat/x
+ok     bloquea  git push git@github.com:leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x
+ok     bloquea  git push --repo=origin feat/x
 -- identidad incompleta o de otra cuenta
+ok     bloquea  git commit -m x
 ok     bloquea  git commit -m x
 ok     bloquea  git push -u origin feat/x
 ok     bloquea  git commit -m x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
+ok     bloquea  git push -u origin feat/x
 ok     bloquea  git push -u origin feat/x
 ok     bloquea  gh pr create --title x --body y
 ok     permite  git commit -m x
@@ -369,7 +384,7 @@ ok     pasa     el job hooks corre la suite
 ok     pasa     el job hooks corre la suite con mawk
 ok     pasa     el job hooks instala mawk si falta (no lo omite)
 ok     pasa     CI corre en pull_request
-ok     pasa     CI corre en push a feat/** y fix/**
+ok     pasa     CI corre en push a feat/** y fix/** (bajo push:)
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -421,4 +436,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-380 ok, 0 fallos
+395 ok, 0 fallos

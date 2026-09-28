@@ -34,50 +34,80 @@ cmd=$(printf '%s' "$input" | json_get command)
 # agente trabaja como talos-bot con GH_CONFIG_DIR apuntando a ~/.talos-gh (fuera del repo), donde
 # vive su token; la configuración sale de .claude/settings.local.json. Se bloquea lo que un agente
 # haría por costumbre y expondría una credencial, cambiaría de cuenta o aprobaría un PR.
+# Límites conocidos de esta sección y de la identidad de talos-bot (C3 y C4 de cuenta-agente), que
+# no se persiguen porque son sintaxis de shell y no errores comunes; el servidor (CODEOWNERS,
+# protección de ramas, el autor no aprueba su PR) es el control efectivo:
+# - un ; & | dentro de comillas parte el análisis y esconde los flags que siguen:
+#   gh pr review 5 --body "R&D ok" --approve, gh api ... --jq '.a | .b' -X DELETE;
+# - bash -c "git commit ..." o bash -c "gh pr create ..." no se detectan como escritura.
 bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
 # I: inicio de una invocación. F: opciones (con su valor) entre gh o git y el subcomando, o entre
 # el grupo y el subcomando (gh -R o/r pr review, gh pr -R o/r review, gh --hostname x auth token).
 I='(^|[;&|( `])'
 F='( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)*'
 sin_plantilla=${cmd//settings.local.example/}
-if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|settings\.local|\.talos-gh|hosts\.yml'; then
-  bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
+if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|oauth_token|settings\.local|\.talos-gh|hosts\.yml'; then
+  bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, oauth_token, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[:alnum:]_-]|\$)|${I}gh$F +auth$F +status[^;&|]*( -[a-z]*t[a-z]*( |\$)| --show-token)|${I}git( +[^ ;&|]+)* +credential +(fill|approve|reject)"; then
   bloqueo credenciales "el comando imprime una credencial (gh auth token, gh auth status -t, gh auth git-credential, git credential fill)."
 fi
 # env_imprime <segmento>: el segmento imprime variables de entorno: set, export, declare o typeset
-# sin argumentos; printenv sin variable; o env sin un comando que correr (solo opciones o VAR=x).
+# sin argumentos; printenv sin una variable (solo opciones); o env sin un comando que correr (solo
+# opciones o VAR=x).
 env_imprime() {
-  local s=$1 t salta=0
+  local s=$1 t salta=0 prog
   case "$s" in
     set|export|'export -p'|declare|'declare -p'|'declare -x'|'declare -px'|'declare -xp'|typeset|'typeset -p'|'typeset -x') return 0 ;;
-    printenv|printenv\ -*) return 0 ;;
-    env|env\ *) ;;
+    printenv|printenv\ *|env|env\ *) ;;
     *) return 1 ;;
   esac
   set -f
   set -- $s
   set +f
+  prog=$1
+  shift
+  for t in "$@"; do
+    if [ "$salta" = 1 ]; then salta=0; continue; fi
+    case "$prog:$t" in
+      env:-u|env:--unset|env:-C|env:--chdir|env:-S|env:--split-string) salta=1 ;;
+      *:-*) ;;
+      env:*=*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+# env_vacia <segmento>: env con -i, --ignore-environment o - entre sus propias opciones (antes del
+# comando que corre): vacía el entorno y con él la identidad de talos-bot. Un -i del comando que env
+# corre (env LC_ALL=C sed -i ...) no cuenta.
+env_vacia() {
+  local t salta=0
+  case "$1" in env\ *) ;; *) return 1 ;; esac
+  set -f
+  set -- $1
+  set +f
   shift
   for t in "$@"; do
     if [ "$salta" = 1 ]; then salta=0; continue; fi
     case "$t" in
+      -i|--ignore-environment|-) return 0 ;;
       -u|--unset|-C|--chdir|-S|--split-string) salta=1 ;;
       -*|*=*) ;;
       *) return 1 ;;
     esac
   done
-  return 0
+  return 1
 }
 while IFS= read -r seg; do
   seg="${seg#"${seg%%[![:space:]]*}"}"
   seg="${seg%"${seg##*[![:space:]]}"}"
   seg=${seg#\(}
   env_imprime "$seg" && bloqueo credenciales "el comando imprime variables de entorno ($seg)."
+  env_vacia "$seg" && bloqueo identidad "el comando vacía el entorno (env -i) y con él la identidad de talos-bot."
 done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
-if printf '%s\n' "$cmd" | grep -Eq "GH_CONFIG_DIR|GIT_CONFIG_|${I}gh$F +auth$F +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|\$)|${I}git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)|${I}env( +[^;&|]*)? +(-i|--ignore-environment|-)( |\$)"; then
-  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper, env -i). La identidad de talos-bot sale de .claude/settings.local.json."
+if printf '%s\n' "$cmd" | grep -Eq "GH_CONFIG_DIR|GIT_CONFIG_|${I}gh$F +auth$F +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|\$)|${I}git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)"; then
+  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot sale de .claude/settings.local.json."
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +pr$F +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |\$))"; then
   bloqueo aprobación "el agente nunca aprueba PRs; la aprobación de code owner es de Leonardo."
@@ -210,16 +240,20 @@ archivo_identidad="$(dirname "$0")/../identidad-agente.txt"
 if [ -e "$archivo_identidad" ]; then
   # Cada segmento (separado por ; & | o salto de línea) se clasifica por separado: una invocación
   # con --help no escribe, pero no borra una escritura detectada en otro segmento.
-  escribe_git=0 escribe_gh=0 empuja=0
+  escribe_git=0 escribe_gh=0 empuja=0 pushes=()
   while IFS= read -r seg; do
     [ -n "${seg//[[:space:]]/}" ] || continue
     s=" $seg "
     if printf '%s\n' "$s" | grep -Eq "${I}git$F +(commit|push)([^[:alnum:]_-]|\$)"; then
       escribe_git=1
-      printf '%s\n' "$s" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)" && empuja=1
+      if printf '%s\n' "$s" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)"; then
+        empuja=1
+        pushes+=("$seg")
+      fi
     fi
     printf '%s\n' "$s" | grep -Eq "${I}gh( |\$)" || continue
-    printf '%s\n' "$s" | grep -Eq ' (--help|-h)( |$)' && continue
+    # --help o -h solo cuentan como token fuera de comillas: en un --title o --body son texto.
+    printf '%s\n' "$s" | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq ' (--help|-h)( |$)' && continue
     if printf '%s\n' "$s" | grep -Eq "${I}gh$F +pr$F +(create|new|merge|review|comment|edit|close|reopen|ready)([^[:alnum:]_-]|\$)"; then
       escribe_gh=1
     elif printf '%s\n' "$s" | grep -Eq "${I}gh$F +api( |\$)"; then
@@ -241,7 +275,48 @@ if [ -e "$archivo_identidad" ]; then
     [ -n "$esperado" ] || bloqueo identidad "$falta: .claude/identidad-agente.txt está vacío o no se puede leer."
     { [ -n "${GH_CONFIG_DIR:-}" ] && [ -n "${GIT_CONFIG_COUNT:-}" ]; } ||
       bloqueo identidad "$falta: GH_CONFIG_DIR o GIT_CONFIG_COUNT no están definidas en la sesión."
-    [ "${GIT_AUTHOR_NAME:-}" = "$esperado" ] || bloqueo identidad "$falta: el autor de los commits no es $esperado."
+    { [ "${GIT_AUTHOR_NAME:-}" = "$esperado" ] && [ "${GIT_COMMITTER_NAME:-}" = "$esperado" ]; } ||
+      bloqueo identidad "$falta: el autor o el committer de los commits no es $esperado."
+    if [ "$empuja" = 1 ]; then
+      # git push: la credencial tiene que salir de gh (talos-bot) y no del Git Credential Manager de
+      # Leonardo. Se exige la configuración exacta de la plantilla, que el helper efectivo para
+      # github.com sea gh y que el remoto sea HTTPS sin usuario (por SSH saldría la llave de Leonardo).
+      clave='credential.https://github.com.helper'
+      { [ "${GIT_CONFIG_COUNT:-}" = 2 ] && [ "${GIT_CONFIG_KEY_0:-}" = "$clave" ] &&
+        [ "${GIT_CONFIG_VALUE_0+definida}" = definida ] && [ -z "${GIT_CONFIG_VALUE_0-}" ] &&
+        [ "${GIT_CONFIG_KEY_1:-}" = "$clave" ] && [ "${GIT_CONFIG_VALUE_1:-}" = '!gh auth git-credential' ]; } ||
+        bloqueo identidad "$falta: la configuración del helper de credenciales no es la de la plantilla (GIT_CONFIG_COUNT, GIT_CONFIG_KEY_0/1, GIT_CONFIG_VALUE_0/1)."
+      efectivo=$(git config --get-urlmatch credential.helper https://github.com 2>/dev/null) || efectivo=""
+      [ "${efectivo//$'\r'/}" = '!gh auth git-credential' ] ||
+        bloqueo identidad "$falta: el helper de credenciales efectivo para github.com es '${efectivo:-ninguno}', no gh."
+      for p in "${pushes[@]}"; do
+        remoto=""
+        visto=0
+        set -f
+        # shellcheck disable=SC2086
+        set -- $p
+        set +f
+        for t in "$@"; do
+          if [ "$visto" = 0 ]; then [ "$t" = push ] && visto=1; continue; fi
+          case "$t" in
+            --repo|--repo=*) bloqueo identidad "$falta: git push --repo no está soportado; usa git push <remoto> <rama>." ;;
+            -*) ;;
+            *) remoto=$t; break ;;
+          esac
+        done
+        remoto=${remoto//[\"\']/}
+        remoto=${remoto:-origin}
+        case "$remoto" in
+          *://*|*@*) url=$remoto ;;
+          *) url=$(git remote get-url --push "$remoto" 2>/dev/null) || url="" ;;
+        esac
+        url=${url//$'\r'/}
+        case "$url" in
+          https://github.com/*) ;;
+          *) bloqueo identidad "$falta: el remoto '$remoto' ($url) no es HTTPS de github.com sin usuario; por SSH o con usuario el push no sale como $esperado." ;;
+        esac
+      done
+    fi
     if [ "$escribe_gh" = 1 ] || [ "$empuja" = 1 ]; then
       login=$(gh api user --jq .login 2>/dev/null) || login=""
       login=${login//$'\r'/}

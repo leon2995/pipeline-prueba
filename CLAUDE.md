@@ -127,7 +127,7 @@ Por cada subtarea, en este orden:
 
 ### Plantilla de PR
 
-El cuerpo del PR va por `gh pr create --body-file <archivo>` y los mensajes de commit largos por `git commit -F <archivo>`, con el archivo escrito con la herramienta Write. El hook revisa el texto de cada comando Bash y bloquea el que nombra tokens, archivos de credenciales o variables de identidad, aunque sea dentro de un `--body` o un `-m`.
+El cuerpo del PR va por `gh pr create --body-file <archivo>`, los comentarios por `gh pr comment --body-file <archivo>` y los mensajes de commit largos por `git commit -F <archivo>`, con el archivo escrito con la herramienta Write. Los títulos van sin flags ni nombres de variables. El hook revisa el texto de cada comando Bash y bloquea el que nombra tokens, archivos de credenciales o variables de identidad, aunque sea dentro de un `--title`, un `--body` o un `-m`.
 
 Título: `T1: nombre`
 Cuerpo, en este orden:

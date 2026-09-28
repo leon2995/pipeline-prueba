@@ -35,7 +35,8 @@ caso() {
   [ "$quiere" = bloquea ] && esperado=2
   # El hook corre sin las variables de identidad de la sesión que lanza la suite (salvo las que
   # el caso pida en extra_env), para que el resultado no dependa de quién la corre.
-  err=$(printf '%s' "$json" | env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT -u GIT_AUTHOR_NAME \
+  err=$(printf '%s' "$json" | env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 \
+    -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_KEY_1 -u GIT_CONFIG_VALUE_1 -u GIT_AUTHOR_NAME \
     -u GIT_COMMITTER_NAME -u GH_TOKEN -u GITHUB_TOKEN -u FAKE_GH_LOGIN ${extra_env[@]+"${extra_env[@]}"} \
     PATH="$extra_path$PATH" bash "${hooks_alt:-$hooks}/$hook" 2>&1 >/dev/null)
   salio=$?
@@ -391,6 +392,7 @@ g bloquea 'env -u FOO' 'credenciales'
 g bloquea 'env LANG=C' 'credenciales'
 g bloquea 'gh --hostname github.com auth token' 'credenciales'
 g bloquea 'gh auth --hostname github.com status -t' 'credenciales'
+g bloquea 'gh config get -h github.com oauth_token' 'credenciales'
 
 echo "== guard-commands.sh: cambio de identidad (bloquea)"
 g bloquea 'gh auth login' 'identidad'
@@ -429,6 +431,9 @@ g permite 'git config --get user.name'
 g permite 'env LANG=C sort'
 g permite 'env -u FOO python x.py'
 g permite 'printenv PATH'
+g permite 'printenv -0 PATH'
+g permite 'env LC_ALL=C sed -i s/a/b/ f'
+g permite 'env LANG=C sort -'
 
 echo "== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
@@ -437,7 +442,11 @@ variante_identidad() {
   cp "$hooks/../rutas-gobierno.txt" "$tmp/reglas/$1/.claude/" 2>/dev/null
   printf '%s\n' "$2" > "$tmp/reglas/$1/.claude/identidad-agente.txt"
 }
-talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot
+# Identidad completa de talos-bot, igual que la plantilla (sin token: el gh falso responde api user).
+clave_helper='credential.https://github.com.helper'
+talos_git=(GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
+  "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
+talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot
   GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
 extra_path="$tmp/gh-falso:"
 variante_identidad identidad talos-bot
@@ -475,6 +484,8 @@ g permite 'gh pr view 101'
 g permite 'gh api repos/{owner}/{repo}/pulls/5'
 g permite 'gh api -X GET repos/{owner}/{repo}/pulls/5'
 g permite 'gh pr merge --help'
+g bloquea 'gh pr create --title "T3: soporte de --help" --body-file b.md' 'identidad de talos-bot'
+g bloquea "gh pr comment 5 --body 'usa -h para ver opciones'" 'identidad de talos-bot'
 echo "-- con la identidad de talos-bot"
 extra_env=("${talos_env[@]}")
 g permite 'git commit -m x'
@@ -483,17 +494,32 @@ g permite 'gh pr create --title x --body y'
 g permite 'gh pr merge 101 --squash'
 g permite 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x'
 g permite 'gh -R leon2995/pipeline-prueba pr create --title x --body y'
+g permite 'git push https://github.com/leon2995/pipeline-prueba.git feat/x'
 g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
+g bloquea 'git push -u remoto-inexistente feat/x' 'no es HTTPS'
+g bloquea 'git push git@github.com:leon2995/pipeline-prueba.git feat/x' 'no es HTTPS'
+g bloquea 'git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x' 'no es HTTPS'
+g bloquea 'git push --repo=origin feat/x' '--repo'
 echo "-- identidad incompleta o de otra cuenta"
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=leon2995 FAKE_GH_LOGIN=talos-bot)
+talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=leon2995 GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
 g bloquea 'git commit -m x' 'identidad de talos-bot'
-extra_env=(GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
-g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=leon2995 FAKE_GH_LOGIN=talos-bot)
 g bloquea 'git commit -m x' 'identidad de talos-bot'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_CONFIG_COUNT=2 GIT_AUTHOR_NAME=talos-bot FAKE_GH_LOGIN=leon2995)
+extra_env=("${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=talos-bot)
 g bloquea 'git push -u origin feat/x' 'identidad de talos-bot'
-g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot'
+extra_env=("${talos_base[@]}")
+g bloquea 'git commit -m x' 'identidad de talos-bot'
+extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=manager)
+g bloquea 'git push -u origin feat/x' 'plantilla'
+extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
+  "GIT_CONFIG_KEY_1=$clave_helper" GIT_CONFIG_VALUE_1=manager)
+g bloquea 'git push -u origin feat/x' 'plantilla'
+extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
+g bloquea 'git push -u origin feat/x' 'plantilla'
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot GIT_COMMITTER_NAME=talos-bot FAKE_GH_LOGIN=leon2995)
+g bloquea 'git push -u origin feat/x' 'GitHub responde como leon2995'
+g bloquea 'gh pr create --title x --body y' 'GitHub responde como leon2995'
 g permite 'git commit -m x'
 variante_identidad identidad-vacia ''
 extra_env=("${talos_env[@]}")
@@ -621,13 +647,15 @@ bloque_yaml() {
 }
 job_hooks() { bloque_yaml "$ci" hooks '  '; }
 disparadores() { bloque_yaml "$ci" on ''; }
+# push dentro de on: (un filtro de ramas bajo pull_request filtraría ramas base, no pushes).
+disparador_push() { disparadores | awk '/^  push:$/ { d = 1; next } d && /^  [^ ]/ { exit } d'; }
 en_bloque() { "$1" | grep -qE "$2"; }
 chequeo pasa 'el job hooks corre en ubuntu-latest' en_bloque job_hooks '^    runs-on: ubuntu-latest$'
 chequeo pasa 'el job hooks corre la suite' en_bloque job_hooks '^      - run: bash scripts/test-hooks.sh$'
 chequeo pasa 'el job hooks corre la suite con mawk' en_bloque job_hooks 'PATH="/tmp/con-mawk:\$PATH" bash scripts/test-hooks.sh'
 chequeo pasa 'el job hooks instala mawk si falta (no lo omite)' en_bloque job_hooks 'apt-get install -y[a-z -]* mawk'
 chequeo pasa 'CI corre en pull_request' en_bloque disparadores '^  pull_request:'
-chequeo pasa 'CI corre en push a feat/** y fix/**' en_bloque disparadores "^    branches: \[.*'feat/\*\*'.*'fix/\*\*'.*\]"
+chequeo pasa 'CI corre en push a feat/** y fix/** (bajo push:)' en_bloque disparador_push "^    branches: \[.*'feat/\*\*'.*'fix/\*\*'.*\]"
 
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }

@@ -47,8 +47,10 @@ Edita `.pipeline/urls.json` con tus URLs reales y `.pipeline/variables-requerida
 
 ## 4. GitHub
 
+Esta es la protección inicial, mientras el agente todavía usa tu cuenta. Al conectar la cuenta del agente (4b, paso e) cambian las aprobaciones de `main`, los code owners y los checks obligatorios.
+
 1. Settings → Branches → Add rule para `main`:
-   - Require a pull request before merging, con 0 aprobaciones requeridas. GitHub no deja aprobar tu propio PR, y los PR los abre tu cuenta; tu "aprobación" es mergear tú mismo desde la web o la app.
+   - Require a pull request before merging, con 0 aprobaciones requeridas por ahora. GitHub no deja aprobar tu propio PR y, hasta el paso 4b.f, los PR los abre tu cuenta; tu "aprobación" es mergear tú mismo desde la web o la app.
    - Require status checks to pass: marca `secrets` ahora y `node` o `python` en cuanto aparezcan (GitHub solo los lista después de que corren una vez).
    - Do not allow bypassing the above settings.
 2. Misma regla para `staging`.
@@ -56,7 +58,7 @@ Edita `.pipeline/urls.json` con tus URLs reales y `.pipeline/variables-requerida
 
 ## 4b. Cuenta del agente (`talos-bot`) y CODEOWNERS
 
-El agente trabaja con su propia cuenta de GitHub para que el servidor pueda exigir tu aprobación como code owner en los PRs de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). Los pasos van en este orden: **a, b, d, e, c, f, g**. Corre todos los comandos en tu terminal, no a través del agente: el hook bloquea los que nombran tokens, `GH_CONFIG_DIR` o `~/.talos-gh`.
+El agente trabaja con su propia cuenta de GitHub para que el servidor pueda exigir tu aprobación como code owner en los PRs de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). Los pasos van en este orden: **a, b, d, e, c, f, g**. Corre los comandos en tu terminal, no a través del agente: el hook bloquea los que nombran tokens, `GH_CONFIG_DIR` o `~/.talos-gh`. La excepción es la verificación del paso f, que va con `!` dentro de la sesión.
 
 **a. Crear la cuenta.** Crea a mano la cuenta `talos-bot` en github.com con un email propio y 2FA. Los términos de GitHub permiten una cuenta machine gratuita además de la tuya, pero la tiene que crear una persona.
 
@@ -73,7 +75,8 @@ gh api -X PATCH repos/leon2995/pipeline-prueba/branches/main/protection/required
 # staging: 0 aprobaciones y code owners
 gh api -X PATCH repos/leon2995/pipeline-prueba/branches/staging/protection/required_pull_request_reviews \
   -F required_approving_review_count=0 -F require_code_owner_reviews=true
-# checks obligatorios en las dos ramas: reemplaza la lista, por eso van secrets y hooks, los dos de GitHub Actions
+# checks obligatorios en las dos ramas: reemplaza la lista, por eso van secrets y hooks, los dos de GitHub Actions.
+# Si ya marcaste node o python como obligatorios, agrégalos a la lista con el mismo app_id; si no, dejarían de exigirse.
 for b in main staging; do
   printf '%s' '{"strict":false,"checks":[{"context":"secrets","app_id":15368},{"context":"hooks","app_id":15368}]}' |
     gh api -X PATCH "repos/leon2995/pipeline-prueba/branches/$b/protection/required_status_checks" --input -
@@ -92,7 +95,12 @@ done
 
 Esperado: `main` con 1, `true`, `true`, `true` y `secrets:15368`, `hooks:15368`; `staging` con 0, `true`, `false`, `true` y los mismos checks. Después, vuelve a correr el CI de los PRs que ya estaban abiertos (`gh run rerun <id>` o un push vacío), porque si no se quedan esperando el check `hooks`. No corras el pipeline entre e y f: un PR de gobierno abierto como `leon2995` ya no se podría aprobar.
 
-**c. Token e inicio de sesión de `talos-bot`.** En la cuenta `talos-bot`, crea un token **classic** (Settings → Developer settings → Personal access tokens → Tokens (classic)) con vencimiento y los scopes `public_repo` y `workflow`. `public_repo` solo sirve para repos públicos; un repo privado necesita `repo`. `workflow` hace falta para tocar `.github/workflows/`. Un fine-grained token no sirve: no da acceso como colaborador a un repo personal de otra cuenta. Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat:
+**c. Token e inicio de sesión de `talos-bot`.** En la cuenta `talos-bot`, crea un token **classic** (Settings → Developer settings → Personal access tokens → Tokens (classic)) con vencimiento y los scopes `repo`, `read:org` y `workflow`:
+- `repo` y `read:org` son el mínimo que acepta `gh auth login` con un token pegado; sin ellos responde `missing required scopes`. `public_repo` no alcanza aunque el repo sea público. `repo` solo da acceso a los repos donde `talos-bot` es colaboradora (hoy, solo este), y `read:org` no afecta nada porque no hay organizaciones.
+- `workflow` hace falta para tocar `.github/workflows/`.
+- Un fine-grained token no sirve: no da acceso como colaborador a un repo personal de otra cuenta.
+
+Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat:
 
 ```bash
 GH_CONFIG_DIR="$HOME/.talos-gh" gh auth login --hostname github.com --git-protocol https --insecure-storage
@@ -101,23 +109,36 @@ GH_CONFIG_DIR="$HOME/.talos-gh" gh api user --jq .login   # debe decir talos-bot
 gh api user --jq .login                                   # debe seguir diciendo leon2995
 ```
 
-Con `--insecure-storage` el token queda en `~/.talos-gh/hosts.yml` y no toca el keyring de Windows. Si tu cuenta dejara de responder como `leon2995`, vuelve a iniciar tu sesión con `gh auth login`.
+Con `--insecure-storage`, el token de `talos-bot` queda en `~/.talos-gh/hosts.yml` y no en el keyring. Aun así, en `gh` 2.92.0 el login marca a `talos-bot` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
 
 - **Vence: AAAA-MM-DD** (completar en el paso c). Rota el token 14 días antes: crea uno nuevo, repite el login de este paso y revoca el viejo.
 
-**f. Conectar al agente.** Copia `.claude/settings.local.example.json` como `.claude/settings.local.json`. Si ya existe (Claude Code lo crea al guardar permisos), fusiona solo el bloque `env`. Completa `GH_CONFIG_DIR` con la ruta real (`C:/Users/<tu usuario>/.talos-gh`) y el email noreply de `talos-bot`. Lo encuentras en Settings → Emails de esa cuenta y tiene la forma `<id>+talos-bot@users.noreply.github.com`. El archivo no lleva el token. Reinicia la sesión de Claude Code para que tome el `env` nuevo. Para verificar el helper de credenciales:
+**f. Conectar al agente.** Copia `.claude/settings.local.example.json` como `.claude/settings.local.json`. Si ya existe (Claude Code lo crea al guardar permisos), fusiona solo el bloque `env`. Completa `GH_CONFIG_DIR` con la ruta real (`C:/Users/<tu usuario>/.talos-gh`) y el email noreply de `talos-bot`. Lo encuentras en Settings → Emails de esa cuenta y tiene la forma `<id>+talos-bot@users.noreply.github.com`. El archivo no lleva el token. Reinicia la sesión de Claude Code para que tome el `env` nuevo.
+
+Verifica desde la sesión reiniciada con el modo `!` de Claude Code, que corre el comando en la sesión con su `env` y no pasa por el hook. En tu terminal esas variables no existen, y a través del agente el hook bloquea estos comandos:
 
 ```bash
-git config --show-origin --get-regexp '^credential\..*helper$'
+! git config --show-origin --get-regexp '^credential\..*helper$'
 # deben aparecer dos líneas "command line: credential.https://github.com.helper": la primera vacía y la
 # segunda "!gh auth git-credential". El valor vacío anula, para github.com, el helper del sistema
 # (credential.helper manager) que aparece arriba.
-git config --get-urlmatch credential.helper https://github.com   # debe decir: !gh auth git-credential
+! git config --get-urlmatch credential.helper https://github.com   # debe decir: !gh auth git-credential
+! gh api user --jq .login                                          # debe decir: talos-bot
+! git remote get-url origin                                        # debe empezar con https://github.com/ y no llevar usuario
 ```
+
+Si `origin` es SSH (`git@github.com:...`), el push saldría con tu llave: cámbialo con `git remote set-url origin https://github.com/leon2995/pipeline-prueba.git`.
 
 **g. Activación y verificación conjunta.** Con el agente ya como `talos-bot`:
 1. El agente abre un PR sin rutas de gobierno con la fecha de vencimiento en este archivo. Lo mergea a `staging` con 0 aprobaciones.
 2. El agente abre un PR de gobierno que crea `.claude/identidad-agente.txt` con `talos-bot`. Tiene que quedar bloqueado hasta tu aprobación como code owner; lo apruebas y lo mergeas. Con ese archivo en `staging`, el hook exige la identidad de `talos-bot` para commits, push y escrituras en GitHub.
+
+3. En cada PR de prueba, revisa en GitHub quién hizo cada push y cada commit. Tienen que ser de `talos-bot`, no de `leon2995`:
+
+   ```bash
+   gh api repos/leon2995/pipeline-prueba/activity --jq '.[0:5][] | {ref, tipo: .activity_type, actor: .actor.login}'
+   gh pr view <n> --json author,commits --jq '{autor: .author.login, commits: [.commits[].authors[].login]}'
+   ```
 
 Si en el punto 1 GitHub pide una aprobación, o en el punto 2 no la pide, el comportamiento de "code owners con 0 aprobaciones" no es el esperado. La alternativa es subir `staging` a 1 aprobación (y entonces apruebas todo PR a `staging`) o usar un ruleset con la revisión de code owners.
 
