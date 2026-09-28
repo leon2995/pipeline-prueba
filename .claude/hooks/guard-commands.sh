@@ -40,6 +40,21 @@ cmd=$(printf '%s' "$input" | json_get command)
 # - un ; & | dentro de comillas parte el análisis y esconde los flags que siguen:
 #   gh pr review 5 --body "R&D ok" --approve, gh api ... --jq '.a | .b' -X DELETE;
 # - bash -c "git commit ..." o bash -c "gh pr create ..." no se detectan como escritura.
+# Auditoría del intento 3 (sin intento 4, por decisión de Leonardo; se documentan aquí y en el PR, y
+# los de identidad se verifican a mano en los pasos c, f y g de SETUP.md):
+# - imprimir el entorno con espacios o comillas que el análisis por palabras no ve: export  -p (dos
+#   espacios), env FOO="a b", env > archivo, env 2>&1 | grep X, ( env ). Sin token en el entorno
+#   (paso f) no exponen una credencial;
+# - git push: el remoto es la primera palabra que no empieza con - después de push, así que el valor
+#   de una opción (-o x, --receive-pack x) se lee como remoto; sin remoto se asume origin (no se
+#   miran branch.<rama>.pushRemote ni remote.pushDefault) y el remoto se resuelve en el directorio del
+#   hook, no en el de un cd previo. El paso f exige un solo remoto, origin, en HTTPS;
+# - falso positivo con la identidad activa: git push 2>&1 sin remoto y un texto entre comillas con
+#   "git push" seguido de otra palabra (-m, --title) toman esa palabra como remoto y se bloquean;
+# - C4 compara el nombre del autor y del committer, no el email (el paso f lo verifica con git var);
+# - C4 revisa git commit, git push, los gh pr que escriben y gh api de escritura; gh issue, gh run
+#   rerun, gh workflow run, gh label y gh release no se revisan, y gh api .../reviews con
+#   event=APPROVE no se bloquea como aprobación (sale como talos-bot y el servidor lo acota).
 bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
 # I: inicio de una invocación. F: opciones (con su valor) entre gh o git y el subcomando, o entre
 # el grupo y el subcomando (gh -R o/r pr review, gh pr -R o/r review, gh --hostname x auth token).

@@ -98,7 +98,7 @@ Por cada subtarea, en este orden:
 - El token de `talos-bot` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
 - Qué procesos pueden llegar a las credenciales: `gh` y `git` (por el helper `gh auth git-credential`) y cualquier proceso hijo de la sesión, incluido Codex, que hereda `GH_CONFIG_DIR` y podría leer el archivo si lo buscara. El hook bloquea los comandos que nombran tokens o esos archivos, los que imprimen credenciales o variables de entorno y los que cambian de cuenta. `Read`, `Edit` y `Write` están denegados sobre `settings.local.json` y `~/.talos-gh`.
 - La herramienta PowerShell está denegada en `.claude/settings.json`: el agente usa solo Bash, que es donde corren los hooks.
-- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot` para commits, push y escrituras en GitHub. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo.
+- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
 
 ## Prohibido sin excepción
 

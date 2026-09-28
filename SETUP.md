@@ -93,23 +93,30 @@ for b in main staging; do
 done
 ```
 
-Esperado: `main` con 1, `true`, `true`, `true` y `secrets:15368`, `hooks:15368`; `staging` con 0, `true`, `false`, `true` y los mismos checks. Después, vuelve a correr el CI de los PRs que ya estaban abiertos (`gh run rerun <id>` o un push vacío), porque si no se quedan esperando el check `hooks`. No corras el pipeline entre e y f: un PR de gobierno abierto como `leon2995` ya no se podría aprobar.
+Esperado: `main` con 1, `true`, `true`, `true` y `secrets:15368`, `hooks:15368`; `staging` con 0, `true`, `false`, `true` y los mismos checks. Después, a los PRs que ya estaban abiertos empújales un commit vacío (`git commit --allow-empty -m "ci: correr hooks"` y `git push`) o ciérralos y reábrelos, porque si no se quedan esperando el check `hooks`. `gh run rerun` no alcanza: repite la corrida sobre el mismo commit de merge, que es anterior al job `hooks`. No corras el pipeline entre e y f: un PR de gobierno abierto como `leon2995` ya no se podría aprobar.
 
 **c. Token e inicio de sesión de `talos-bot`.** En la cuenta `talos-bot`, crea un token **classic** (Settings → Developer settings → Personal access tokens → Tokens (classic)) con vencimiento y los scopes `repo`, `read:org` y `workflow`:
 - `repo` y `read:org` son el mínimo que acepta `gh auth login` con un token pegado; sin ellos responde `missing required scopes`. `public_repo` no alcanza aunque el repo sea público. `repo` solo da acceso a los repos donde `talos-bot` es colaboradora (hoy, solo este), y `read:org` no afecta nada porque no hay organizaciones.
 - `workflow` hace falta para tocar `.github/workflows/`.
 - Un fine-grained token no sirve: no da acceso como colaborador a un repo personal de otra cuenta.
 
-Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat:
+Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat. Antes del login, guarda tu configuración de credenciales de Git para compararla después:
 
 ```bash
+git config --global --get-regexp '^credential' > ~/credential-antes.txt
 GH_CONFIG_DIR="$HOME/.talos-gh" gh auth login --hostname github.com --git-protocol https --insecure-storage
-# elige "Paste an authentication token"
+# 1. "Authenticate Git with your GitHub credentials?": responde No (la opción por defecto es Sí).
+# 2. "How would you like to authenticate GitHub CLI?": elige "Paste an authentication token".
 GH_CONFIG_DIR="$HOME/.talos-gh" gh api user --jq .login   # debe decir talos-bot
 gh api user --jq .login                                   # debe seguir diciendo leon2995
+git config --global --get-regexp '^credential' | diff ~/credential-antes.txt - && echo sin cambios   # debe decir: sin cambios
+git credential-manager github list                        # no debe aparecer talos-bot (normalmente muestra solo leon2995)
+ssh -T git@github.com                                     # informativo: si dice "Hi leon2995!", un remoto SSH empujaría con tu llave (lo revisa el paso f)
 ```
 
-Con `--insecure-storage`, el token de `talos-bot` queda en `~/.talos-gh/hosts.yml` y no en el keyring. Aun así, en `gh` 2.92.0 el login marca a `talos-bot` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
+La primera pregunta importa. Si respondes Sí, `gh` le entrega el token de `talos-bot` al helper que ya tienes (el Git Credential Manager): borra tu credencial de github.com, guarda la de `talos-bot` en el Credential Manager de Windows, y tus `git push` desde la terminal pasan a salir como `talos-bot` sin aviso. Al agente no le hace falta, porque su helper sale de la plantilla del paso f. Si ya respondiste Sí, corre `git credential-manager github logout talos-bot`: el siguiente `git push` desde tu terminal te pide iniciar sesión de nuevo como `leon2995`. Si respondiste Sí y no tenías helper, `gh` se configura como helper global y el `diff` muestra las líneas nuevas; quítalas con `git config --global --unset-all <clave>`.
+
+Con `--insecure-storage` y la respuesta No, el token de `talos-bot` queda en `~/.talos-gh/hosts.yml` y no en el keyring ni en el Credential Manager. Aun así, en `gh` 2.92.0 el login marca a `talos-bot` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
 
 - **Vence: AAAA-MM-DD** (completar en el paso c). Rota el token 14 días antes: crea uno nuevo, repite el login de este paso y revoca el viejo.
 
@@ -124,10 +131,15 @@ Verifica desde la sesión reiniciada con el modo `!` de Claude Code, que corre e
 # (credential.helper manager) que aparece arriba.
 ! git config --get-urlmatch credential.helper https://github.com   # debe decir: !gh auth git-credential
 ! gh api user --jq .login                                          # debe decir: talos-bot
-! git remote get-url origin                                        # debe empezar con https://github.com/ y no llevar usuario
+! git remote -v                                                    # todas las líneas, fetch y push: https://github.com/... sin usuario
+! git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT            # las dos: talos-bot <ID+talos-bot@users.noreply.github.com>
+! [ -z "${GH_TOKEN-}${GITHUB_TOKEN-}" ] && echo sin variables de token   # debe decir: sin variables de token
 ```
 
-Si `origin` es SSH (`git@github.com:...`), el push saldría con tu llave: cámbialo con `git remote set-url origin https://github.com/leon2995/pipeline-prueba.git`.
+Por qué cada una:
+- `git remote -v`: si un remoto es SSH (`git@github.com:...`) o lleva usuario, el push sale con tu llave o tu credencial. El hook solo revisa el remoto que aparece en el comando (u `origin` si no aparece), y puede confundirlo con el valor de una opción como `-o`. Por eso deja un solo remoto, `origin`, en HTTPS: `git remote set-url origin https://github.com/leon2995/pipeline-prueba.git`, y `git remote set-url --push origin ...` si tiene una URL de push aparte.
+- `git var`: el hook compara solo el nombre del autor y del committer, pero GitHub atribuye los commits por el email. Si el email no es el noreply de `talos-bot` con su ID numérico, el commit queda a tu nombre o sin cuenta.
+- Variables de token: el hook no reconoce todas las formas de imprimir el entorno (por ejemplo `export  -p` con dos espacios o `env FOO="a b"`), así que la sesión no debe tener ningún token en el entorno.
 
 **g. Activación y verificación conjunta.** Con el agente ya como `talos-bot`:
 1. El agente abre un PR sin rutas de gobierno con la fecha de vencimiento en este archivo. Lo mergea a `staging` con 0 aprobaciones.
@@ -138,7 +150,12 @@ Si `origin` es SSH (`git@github.com:...`), el push saldría con tu llave: cámbi
    ```bash
    gh api repos/leon2995/pipeline-prueba/activity --jq '.[0:5][] | {ref, tipo: .activity_type, actor: .actor.login}'
    gh pr view <n> --json author,commits --jq '{autor: .author.login, commits: [.commits[].authors[].login]}'
+   git credential-manager github list   # desde tu terminal: no debe aparecer talos-bot
    ```
+
+   Si algún push o commit del agente sale como `leon2995` (o vacío), o tus propios pushes salen como `talos-bot`, detén el pipeline y repite las verificaciones de los pasos c y f antes de seguir.
+
+4. Con `.claude/identidad-agente.txt` activo, el hook bloquea de más, con un mensaje sobre el remoto, un `git push` sin remoto y con redirección (`git push 2>&1 | tail -3`) y un comando cuyo texto entre comillas diga `git push` seguido de otra palabra (`-m "... git push antes ..."`, `--title "... git push con ..."`). La forma que pasa es `git push <remoto> <rama>`, los mensajes por `-F` y los títulos sin `git push`.
 
 Si en el punto 1 GitHub pide una aprobación, o en el punto 2 no la pide, el comportamiento de "code owners con 0 aprobaciones" no es el esperado. La alternativa es subir `staging` a 1 aprobación (y entonces apruebas todo PR a `staging`) o usar un ruleset con la revisión de code owners.
 
