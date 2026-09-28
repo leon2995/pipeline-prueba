@@ -1,0 +1,6 @@
+# Fuerza fin de línea LF en scripts: en Windows, CRLF rompe bash y python.
+*.sh    text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf

@@ -1,0 +1,4 @@
+{
+  "staging": "https://TU-APP-staging.up.railway.app",
+  "production": "https://TU-APP.up.railway.app"
+}

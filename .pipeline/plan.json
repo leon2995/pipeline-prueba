@@ -1,0 +1,15 @@
+{
+  "proyecto": "",
+  "riesgo": "bajo",
+  "subtareas": [
+    {
+      "id": "T1",
+      "nombre": "",
+      "criterios": ["C1 ...", "C2 ..."],
+      "interfaces": [],
+      "archivos_esperados": [],
+      "estado": "pendiente",
+      "intentos": 0
+    }
+  ]
+}
