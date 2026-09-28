@@ -73,7 +73,7 @@ Por cada subtarea, en este orden:
 
 ## Fase 4: Integración y deploy
 
-- CI en verde y `PASS` → merge del PR a `staging` con `gh pr merge --squash`. Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
+- CI en verde y `PASS` → merge del PR a `staging` con `gh pr merge <n> --squash`, siempre con el número del PR (el hook bloquea la forma sin número). Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
 - Corre `/verificar-deploy staging`. Si falla: PR de revert a `staging` y `HUMAN`.
 - Si staging pasa: abre PR de `staging` a `main` con el resumen de todas las subtareas, la evidencia y los veredictos. Leonardo lo revisa y lo mergea él mismo desde GitHub (web o app). Tú nunca mergeas ni empujas a `main`; el hook lo bloquea.
 - Tras el merge a `main`, corre `/verificar-deploy production`. Si falla: abre PR de revert a `main` y `HUMAN`.
@@ -87,6 +87,7 @@ Por cada subtarea, en este orden:
 - Borrar datos, ramas, servicios o variables.
 - Instalar una dependencia con licencia distinta de MIT, Apache o BSD.
 - Gastar dinero: servicios nuevos, planes, APIs de pago.
+- Mergear a `staging` un PR que modifique, borre o renombre alguna ruta listada en `.claude/rutas-gobierno.txt`: lo mergea Leonardo. El hook `guard-commands.sh` bloquea ese `gh pr merge`.
 
 ## Prohibido sin excepción
 

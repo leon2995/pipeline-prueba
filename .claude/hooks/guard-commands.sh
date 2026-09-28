@@ -97,6 +97,7 @@ analizar_git() {
     }
     END { print res }'
 }
+msg_borrado="Bloqueado por protocolo (borrar ramas: git branch -d/-D/--delete, git push --delete o :rama, git update-ref -d, gh pr merge -d/--delete-branch). Si de verdad hace falta, pídele a Leonardo que lo ejecute él."
 veredicto=$(analizar_git "$cmd")
 veredicto=${veredicto%$'\r'}
 case "$veredicto" in
@@ -108,7 +109,7 @@ case "$veredicto" in
     echo "Bloqueado por protocolo (push a main). El merge a main lo hace Leonardo." >&2
     exit 2 ;;
   borrado)
-    echo "Bloqueado por protocolo (borrar ramas: git branch -d/-D/--delete, git push --delete o :rama, git update-ref -d). Si de verdad hace falta, pídele a Leonardo que lo ejecute él." >&2
+    echo "$msg_borrado" >&2
     exit 2 ;;
   *)
     # Fail-closed acotado: si awk no responde una palabra válida (no existe, se cae, sale con
@@ -150,16 +151,176 @@ if printf '%s' "$cmd" | grep -Eq '^railway variables' && ! printf '%s' "$cmd" | 
   echo "Bloqueado: 'railway variables' solo se permite listando nombres, por ejemplo: railway variables --kv | cut -d= -f1" >&2
   exit 2
 fi
-# gh pr merge: solo se permite con base staging. El merge a main lo hace Leonardo.
-if printf '%s' "$cmd" | grep -Eq '(^|[;&| ])gh pr merge'; then
-  if printf '%s' "$cmd" | grep -Eq -- '--admin'; then
-    echo "Bloqueado: --admin salta las protecciones de rama." >&2; exit 2
+# gh pr merge: solo a staging, con número de PR explícito, un merge por comando, sin --admin,
+# --auto ni borrar la rama, y nunca un PR que toque (modifique, borre o renombre) una ruta de
+# .claude/rutas-gobierno.txt: esos los mergea Leonardo, también a staging. Si algo no se puede
+# verificar, se bloquea.
+# Límites conocidos (auditorías de hooks-windows-y-gobierno). El modelo de amenaza es errores
+# del agente; el control real sobre los PRs de gobierno va en el servidor (cuenta propia del
+# agente y CODEOWNERS). El hook deja pasar:
+# - un cd (o pushd, o un cd de un comando anterior) a otro repositorio antes del merge: consulta
+#   el PR con ese número en el repositorio del directorio de la sesión, no en el del merge;
+# - merges desde PowerShell u otra herramienta distinta de Bash: el hook solo corre con el
+#   matcher "Bash" de .claude/settings.json;
+# - gh.exe pr merge y bash -c "gh pr merge ...", que no se detectan como merge.
+# Y bloquea de más, por conservador:
+# - GH_REPO= o GH_HOST= escritos dentro de un --body o --subject;
+# - un merge partido en varias líneas con \ o un --body de varias líneas (el mensaje es
+#   engañoso); usa una sola línea y --body-file;
+# - el texto "gh pr merge" dentro de un --body, que cuenta como un segundo merge.
+# Detección amplia: gh pr merge con flags (y sus valores) entre gh, pr y merge, espacios de más,
+# o dentro de ( ) o `...`. Un "merge" en el texto de otro subcomando (gh pr create --title
+# "fix merge") no cuenta, porque entre pr y merge solo se admiten flags.
+patron_merge='(^|[;&|( `])gh( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +pr( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)* +merge([^[:alnum:]_-]|$)'
+if printf '%s\n' "$cmd" | grep -Eq "$patron_merge"; then
+  bloquear() { echo "Bloqueado por protocolo: $1" >&2; exit 2; }
+  minusculas() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+  # cortar <texto>: imprime el texto hasta el primer ; & | o salto de línea que esté fuera de
+  # comillas y sin escapar (un --body "R&D; listo" no corta el comando).
+  cortar() {
+    local s=$1 out="" q="" c i=0 n=${#1}
+    while [ "$i" -lt "$n" ]; do
+      c=${s:i:1}
+      if [ "$q" = "'" ]; then
+        [ "$c" = "'" ] && q=""
+      elif [ "$q" = '"' ]; then
+        if [ "$c" = '\' ]; then out+=$c; i=$((i + 1)); c=${s:i:1}
+        elif [ "$c" = '"' ]; then q=""; fi
+      else
+        case "$c" in
+          "'"|'"') q=$c ;;
+          '\') out+=$c; i=$((i + 1)); c=${s:i:1} ;;
+          ';'|'&'|'|'|$'\n') break ;;
+          '#') { [ -z "$out" ] || [[ "$out" == *[[:space:]] ]]; } && break ;;   # comentario
+        esac
+      fi
+      out+=$c
+      i=$((i + 1))
+    done
+    printf '%s' "$out"
+  }
+
+  estrictos=$(printf '%s\n' "$cmd" | grep -Eo '(^|[;&|( `])gh pr merge' | wc -l)
+  amplios=$(printf '%s\n' "$cmd" | grep -Eo "$patron_merge" | wc -l)
+  if [ $((estrictos)) -gt 1 ] || [ $((amplios)) -gt 1 ]; then
+    bloquear "un merge por comando. Corre cada gh pr merge por separado."
   fi
-  target=$(printf '%s' "$cmd" | sed -E 's/.*gh pr merge//' | tr ' ' '\n' | grep -v '^-' | grep -v '^$' | head -n1)
-  base=$(gh pr view $target --json baseRefName -q .baseRefName 2>/dev/null || true)
+  [ $((estrictos)) -eq 1 ] ||
+    bloquear "escribe el merge como gh pr merge <n> --squash, sin nada entre gh, pr y merge."
+  case "$cmd" in
+    *GH_REPO=*|*GH_HOST=*) bloquear "gh pr merge con GH_REPO o GH_HOST: apunta a otro repositorio o servidor." ;;
+  esac
+
+  # Argumentos: se normalizan las redirecciones con & (2>&1, >&2, &>, >|), se corta en el primer
+  # separador fuera de comillas y se separan respetando comillas con xargs (no ejecuta nada).
+  # Comillas sin cerrar: no se pueden leer, se bloquea.
+  resto=$(printf '%s' "${cmd#*gh pr merge}" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g')
+  resto=$(cortar "$resto")
+  args=()
+  if [ -n "${resto//[[:space:]]/}" ]; then
+    lista=$(printf '%s' "$resto" | xargs -n1 printf '%s\n' 2>/dev/null) ||
+      bloquear "no pude leer los argumentos de gh pr merge (¿comillas sin cerrar?)."
+    while IFS= read -r a; do args+=("$a"); done <<< "$lista"
+  fi
+
+  # Flags: se saltan los valores de los que llevan uno y las redirecciones; lo que queda es el PR.
+  target="" posicionales=0 salta=0
+  for a in ${args[@]+"${args[@]}"}; do
+    if [ "$salta" = 1 ]; then salta=0; continue; fi
+    case "$a" in
+      [0-9]*[\<\>]*|[\<\>]*)              # redirección: >archivo, 2>err, o el operador solo
+        case "$a" in *[!0-9\<\>]*) ;; *) salta=1 ;; esac ;;
+      --admin|--admin=*) bloquear "--admin salta las protecciones de rama." ;;
+      --auto|--auto=*) bloquear "sin --auto: GitHub mergearía después, con un estado del PR que este hook no revisó. Mergea cuando CI esté en verde." ;;
+      --delete-branch|--delete-branch=*) echo "$msg_borrado" >&2; exit 2 ;;
+      --repo|--repo=*) bloquear "gh pr merge en otro repositorio (-R/--repo)." ;;
+      --author-email|--body|--body-file|--match-head-commit|--subject) salta=1 ;;
+      --*) ;;
+      -*)
+        # Grupo de flags cortos: sin el =valor, las letras antes del primer flag que lleva valor
+        # (A, b, F, t, R) son booleanos; lo que sigue a ese flag es su valor (-tdocs, -t7).
+        grupo=${a#-}
+        grupo=${grupo%%=*}
+        booleanos=${grupo%%[AbFtR]*}
+        case "$booleanos" in *d*) echo "$msg_borrado" >&2; exit 2 ;; esac
+        if [ "$booleanos" != "$grupo" ]; then
+          [ "${grupo:${#booleanos}:1}" = R ] && bloquear "gh pr merge en otro repositorio (-R/--repo)."
+          # El valor va en el token siguiente si el flag con valor cierra el grupo y no hay =.
+          [ "${#grupo}" -eq $((${#booleanos} + 1)) ] && [ "$a" = "${a%%=*}" ] && salta=1
+        fi ;;
+      *) posicionales=$((posicionales + 1)); target=$a ;;
+    esac
+  done
+  [ "$posicionales" -gt 1 ] && bloquear "no pude identificar un único PR en gh pr merge ($posicionales argumentos sin flag)."
+  case "$target" in
+    ''|*[!0-9]*) bloquear "indica el número del PR: gh pr merge <n> --squash. Sin número (o con una rama o URL), el hook revisaría otro PR que el que se mergea." ;;
+  esac
+
+  # Reglas de .claude/rutas-gobierno.txt (formato explicado en el propio archivo).
+  archivo_reglas="$(dirname "$0")/../rutas-gobierno.txt"
+  if [ ! -f "$archivo_reglas" ] || [ ! -r "$archivo_reglas" ] || ! texto_reglas=$(cat "$archivo_reglas" 2>/dev/null); then
+    bloquear "no pude leer .claude/rutas-gobierno.txt; sin esa lista no se puede verificar el PR."
+  fi
+  reglas=()
+  while IFS= read -r r; do
+    r=${r//$'\r'/}
+    r="${r#"${r%%[![:space:]]*}"}"
+    r="${r%"${r##*[![:space:]]}"}"
+    case "$r" in ''|'#'*) continue ;; esac
+    case "${r#\*\*/}" in *'*'*) bloquear "regla no soportada en .claude/rutas-gobierno.txt: $r" ;; esac
+    reglas+=("$(minusculas "$r")")
+  done <<< "$texto_reglas"
+  [ "${#reglas[@]}" -gt 0 ] || bloquear ".claude/rutas-gobierno.txt no tiene reglas; no se puede verificar el PR."
+
+  # coincide <ruta en minúsculas>: imprime la regla que la cubre, o sale con 1.
+  coincide() {
+    local p=$1 r x
+    for r in "${reglas[@]}"; do
+      case "$r" in
+        '**/'*/) x=${r#\*\*/}; case "$p" in "$x"*|*/"$x"*) printf '%s' "$r"; return 0 ;; esac ;;
+        '**/'*) x=${r#\*\*/}; case "$p" in "$x"|*/"$x") printf '%s' "$r"; return 0 ;; esac ;;
+        */) case "$p" in "$r"*) printf '%s' "$r"; return 0 ;; esac ;;
+        *) if [ "$p" = "$r" ]; then printf '%s' "$r"; return 0; fi ;;
+      esac
+    done
+    return 1
+  }
+
+  # Consulta 1: número, base y archivos del PR (gh devuelve como máximo 100 archivos).
+  sel=()
+  [ -n "$target" ] && sel=("$target")
+  datos=$(gh pr view ${sel[@]+"${sel[@]}"} --json number,baseRefName,changedFiles,files \
+    --jq '.number, .baseRefName, .changedFiles, (.files|length), .files[].path' 2>/dev/null) ||
+    bloquear "no pude consultar el PR con gh pr view${target:+ $target}; sin la lista de archivos no se puede verificar."
+  datos=${datos//$'\r'/}
+  lineas=()
+  while IFS= read -r l; do lineas+=("$l"); done <<< "$datos"
+  numero=${lineas[0]:-} base=${lineas[1]:-} total=${lineas[2]:-} devueltos=${lineas[3]:-}
+  for v in "$numero" "$total" "$devueltos"; do
+    case "$v" in ''|*[!0-9]*) bloquear "respuesta inesperada de gh pr view${target:+ $target}; no se puede verificar." ;; esac
+  done
   if [ "$base" != "staging" ]; then
-    echo "Bloqueado: solo puedes mergear PRs con base staging (base detectada: ${base:-desconocida}). Usa: gh pr merge <numero> --squash. El merge a main lo hace Leonardo." >&2
-    exit 2
+    bloquear "solo puedes mergear PRs con base staging (base detectada: ${base:-desconocida}). Usa: gh pr merge <numero> --squash. El merge a main lo hace Leonardo."
   fi
+  [ "$total" -gt 0 ] || bloquear "el PR #$numero figura sin archivos; no se puede verificar."
+  rutas=("${lineas[@]:4}")
+  if [ "$devueltos" -ne "$total" ] || [ "${#rutas[@]}" -ne "$devueltos" ]; then
+    bloquear "lista incompleta de archivos del PR #$numero ($devueltos de $total); no se puede verificar."
+  fi
+
+  # Consulta 2: nombres anteriores de archivos renombrados (files solo trae la ruta nueva).
+  anteriores=$(gh api "repos/{owner}/{repo}/pulls/$numero/files" --paginate \
+    --jq '.[] | select(.previous_filename) | .previous_filename' 2>/dev/null) ||
+    bloquear "no pude consultar los renombres del PR #$numero con gh api; no se puede verificar."
+  anteriores=${anteriores//$'\r'/}
+  if [ -n "$anteriores" ]; then
+    while IFS= read -r l; do rutas+=("$l"); done <<< "$anteriores"
+  fi
+
+  for ruta in "${rutas[@]}"; do
+    if regla=$(coincide "$(minusculas "$ruta")"); then
+      bloquear "el PR #$numero toca la ruta de gobierno $ruta (regla $regla de .claude/rutas-gobierno.txt): lo mergea Leonardo, también a staging."
+    fi
+  done
 fi
 exit 0
