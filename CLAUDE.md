@@ -87,6 +87,7 @@ Por cada subtarea, en este orden:
 - Borrar datos, ramas, servicios o variables.
 - Instalar una dependencia con licencia distinta de MIT, Apache o BSD.
 - Gastar dinero: servicios nuevos, planes, APIs de pago.
+- Mergear a `staging` un PR que modifique, borre o renombre alguna ruta listada en `.claude/rutas-gobierno.txt`: lo mergea Leonardo. El hook `guard-commands.sh` bloquea ese `gh pr merge`.
 
 ## Prohibido sin excepción
 

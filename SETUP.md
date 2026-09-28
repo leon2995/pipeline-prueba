@@ -17,7 +17,7 @@ npm i -g @railway/cli  # o: brew install railway
 railway login
 railway setup agent -y # instala skills y MCP de Railway para Claude Code y Codex
 
-# Codex CLI (segundo auditor, usa tu ChatGPT Pro)
+# Codex CLI (segundo auditor, usa tu ChatGPT Business)
 npm i -g @openai/codex
 codex login            # elige "Sign in with ChatGPT"
 

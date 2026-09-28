@@ -96,6 +96,70 @@ ok     permite  git status
 ok     bloquea  git push -u origin feat/x
 ok     bloquea  git branch -d rama
 ok     permite  git status
+== guard-commands.sh: gh pr merge y rutas de gobierno (.claude/rutas-gobierno.txt), con gh falso
+ok     permite  gh pr merge 101 --squash
+ok     permite  gh pr merge --squash
+ok     bloquea  gh pr merge 102 --squash
+ok     bloquea  gh pr merge 103 --squash
+ok     bloquea  gh pr merge 104 --squash
+ok     bloquea  gh pr merge 105 --squash
+ok     bloquea  gh pr merge 106 --squash
+ok     bloquea  gh pr merge 107 --squash
+ok     bloquea  gh pr merge 108 --squash
+ok     bloquea  gh pr merge 109 --squash
+ok     bloquea  gh pr merge 110 --squash
+ok     bloquea  gh pr merge 111 --squash
+ok     bloquea  gh pr merge 112 --squash
+ok     bloquea  gh pr merge 113 --squash
+ok     permite  gh pr merge 131 --squash
+ok     permite  gh pr merge 132 --squash
+ok     permite  gh pr merge 133 --squash
+ok     permite  gh pr merge 134 --squash
+ok     permite  gh pr merge 135 --squash
+ok     permite  gh pr merge 136 --squash
+ok     bloquea  gh pr merge 115 --squash
+ok     bloquea  gh pr merge 116 --squash
+ok     bloquea  gh pr merge 117 --squash
+ok     bloquea  gh pr merge 118 --squash
+ok     bloquea  gh pr merge 119 --squash
+ok     bloquea  gh pr merge 101 --squash && gh pr merge 102 --squash
+ok     bloquea  gh pr merge 101 102
+ok     permite  gh pr merge --subject 7 101
+ok     bloquea  gh pr merge -t 7 102
+ok     permite  gh pr merge 101 --body "texto con espacios"
+ok     bloquea  gh pr merge 101 --body "sin cerrar
+ok     bloquea  gh pr merge -R otro/repo 101
+== guard-commands.sh: flags de gh pr merge, con gh falso
+ok     bloquea  gh pr merge 101 -d
+ok     bloquea  gh pr merge 101 --delete-branch
+ok     bloquea  gh pr merge 101 --squash -d
+ok     bloquea  gh pr merge 101 -sd
+ok     bloquea  gh pr merge 101 --auto
+ok     bloquea  gh pr merge 101 --squash --auto
+ok     permite  gh pr merge 101 --merge
+ok     permite  gh pr merge 101 --rebase
+ok     permite  gh pr merge 101 --disable-auto
+ok     permite  gh pr merge 101 -s
+ok     permite  gh pr merge 101 -m
+ok     permite  gh pr merge 101 -r
+ok     permite  gh pr merge 101 --subject x
+ok     permite  gh pr merge 101 --body x
+ok     permite  gh pr merge 101 --match-head-commit abc123
+== guard-commands.sh: archivo de reglas, con una copia del hook y gh falso
+-- control
+ok     permite  gh pr merge 101 --squash
+ok     bloquea  gh pr merge 102 --squash
+-- ausente
+ok     bloquea  gh pr merge 101 --squash
+-- vacio
+ok     bloquea  gh pr merge 101 --squash
+-- ilegible
+ok     bloquea  gh pr merge 101 --squash
+-- crlf
+ok     permite  gh pr merge 101 --squash
+ok     bloquea  gh pr merge 102 --squash
+-- no-soportada
+ok     bloquea  gh pr merge 101 --squash
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -114,10 +178,26 @@ ok     bloquea  docs/adr/0001-stack.md
 ok     bloquea  .github/workflows/ci.yml
 ok     permite  src/app.py
 ok     permite  tests/unit/test_app.py
+-- rutas Windows absolutas (Claude Code en Windows entrega C:\...\x)
+ok     bloquea  C:\Users\dev\repo\tests\acceptance\test_c1.py
+ok     bloquea  C:\Users\dev\repo\.claude\settings.json
+ok     bloquea  C:\Users\dev\repo\.claude\hooks\guard-commands.sh
+ok     bloquea  C:\Users\dev\repo\CLAUDE.md
+ok     bloquea  C:\Users\dev\repo\LESSONS.md
+ok     bloquea  C:\Users\dev\repo\docs\adr\0001-stack.md
+ok     bloquea  C:\Users\dev\repo\.github\workflows\ci.yml
+ok     permite  C:\Users\dev\repo\src\app.py
+ok     permite  C:\Users\dev\repo\tests\unit\test_app.py
+ok     bloquea  C:\Users\dev\repo\CLAUDE.md + \r final
 == only-acceptance-tests.sh (test-writer)
 ok     permite  tests/acceptance/test_c1.py
 ok     bloquea  src/app.py
 ok     bloquea  tests/unit/test_app.py
+-- rutas Windows absolutas
+ok     permite  C:\Users\dev\repo\tests\acceptance\test_c1.py
+ok     bloquea  C:\Users\dev\repo\src\app.py
+ok     bloquea  C:\Users\dev\repo\tests\unit\test_app.py
+ok     permite  C:\Users\dev\repo\tests\acceptance\test_c1.py + \r final
 == run-tests.sh (Stop del engineer)
 ok     permite  proyecto sin package.json ni pyproject.toml
 ok     permite  tests en rojo con stop_hook_active (evita bucle)
@@ -125,4 +205,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-112 ok, 0 fallos
+181 ok, 0 fallos
