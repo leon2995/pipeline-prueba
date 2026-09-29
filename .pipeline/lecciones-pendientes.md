@@ -11,7 +11,7 @@ Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archiv
 
 ## Pendientes
 
-- [2026-09-28] [lecciones-1] PR de lecciones: descartar una pendiente porque 'ya está documentada en X' exige citar la línea de X que la cubre; si no existe, el patrón sale del repo sin rastro. El historial debe listar cada descartada con su veredicto de origen. (PR de lecciones-1, `veredicto-lecciones-1.json`)
+- [2026-09-28] [lecciones-1] PR de lecciones: descartar una pendiente porque 'ya está documentada en X' exige citar la línea de X que la cubre; si no existe, el patrón sale del repo sin rastro. El historial debe listar cada descartada con su veredicto de origen. (PR #14, `veredicto-lecciones-1.json`)
 
 ## Historial
 
@@ -19,7 +19,7 @@ Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archiv
 
 Quedaron fuera las lecciones de los PRs #1 y #2 (hook-force-push y audit-codex-stdin). Leonardo decidió dejar en `LESSONS.md` solo las dos lecciones generales de esa época, y no llevar la de las citas.
 
-### 2026-09-28: primer PR de lecciones (lecciones-1)
+### 2026-09-28: primer PR de lecciones (#14)
 
 Criterio de Leonardo para este PR: proponer como máximo 5 lecciones generales para `LESSONS.md` y descartar las específicas del hook, que ya están documentadas en `guard-commands.sh`. Las líneas citadas son de `staging` en `ba8ed7c`.
 
