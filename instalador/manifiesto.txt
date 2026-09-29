@@ -1,0 +1,56 @@
+# Manifiesto del instalador (T3b): archivos del framework que instalar.sh copia al destino.
+#
+# Formato: una ruta por línea, relativa a la raíz de este repo (la fuente), con / como separador.
+# Solo archivos, no carpetas. # al comienzo de la línea inicia un comentario; se ignoran las
+# líneas vacías y los espacios de los extremos. Toda ruta tiene que existir en la fuente.
+#
+# Nunca van aquí: .claude/settings.local.json, .claude/identidad-agente.txt, .claude/worktrees/,
+# el estado de .pipeline/ de este repo (criterios, evidencia, veredictos, test-hooks-salida.txt,
+# lecciones-pendientes.md, plan.json, modo), tests/, instalador/, package.json, package-lock.json,
+# SETUP.md, README.md, railway.json y docs/FASE-2-HERMES.md.
+# Los archivos que genera el instalador (.pipeline/lecciones-pendientes.md, .pipeline/plan.json,
+# .pipeline/criterios-T1.md y .railway/railway.ts) salen de instalador/plantillas/.
+
+# Protocolo, memoria y git
+CLAUDE.md
+LESSONS.md
+.gitattributes
+.gitignore
+
+# Claude Code: agentes, comandos, prompts y hooks
+.claude/agents/auditor.md
+.claude/agents/engineer.md
+.claude/agents/test-writer.md
+.claude/commands/audit-codex.md
+.claude/commands/verificar-deploy.md
+.claude/prompts/auditor-codex.md
+.claude/hooks/_lib.sh
+.claude/hooks/guard-commands.sh
+.claude/hooks/only-acceptance-tests.sh
+.claude/hooks/protect-acceptance-tests.sh
+.claude/hooks/readonly-guard.sh
+.claude/hooks/run-tests.sh
+
+# Claude Code: configuración y gobierno
+.claude/rutas-gobierno.txt
+.claude/settings.json
+.claude/settings.local.example.json
+.claude/pipeline.conf
+
+# GitHub
+.github/CODEOWNERS
+.github/workflows/ci.yml
+
+# Decisiones
+docs/adr/0000-plantilla.md
+
+# Scripts del pipeline
+scripts/jev.py
+scripts/test-hooks.sh
+scripts/run-task.sh
+scripts/resume-task.sh
+scripts/watch-deploy.sh
+
+# Estado operativo base
+.pipeline/README.md
+.pipeline/urls.json

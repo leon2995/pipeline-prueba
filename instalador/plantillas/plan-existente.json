@@ -1,0 +1,21 @@
+{
+  "proyecto": "{{repo}}",
+  "riesgo": "bajo",
+  "subtareas": [
+    {
+      "id": "T1",
+      "nombre": "ADR del stack actual",
+      "criterios": [
+        "C1 el ADR existe y sigue la plantilla",
+        "C2 stack con la fuente de cada dato",
+        "C3 comandos reales de instalar, probar, construir y arrancar",
+        "C4 integraciones y variables de entorno, solo por nombre",
+        "C5 sin cambios de código"
+      ],
+      "interfaces": [],
+      "archivos_esperados": ["docs/adr/0001-stack-actual.md"],
+      "estado": "pendiente",
+      "intentos": 0
+    }
+  ]
+}
