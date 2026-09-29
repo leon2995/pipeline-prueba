@@ -1,0 +1,21 @@
+{
+  "task": "nombre-agente",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "baja",
+      "file": "SETUP.md",
+      "detail": "C1 dice que no debe quedar ningún talos-bot que no sea parte de talos-bot-leon, pero C4 exige la nota del paso a (línea 63: '(`talos-bot` estaba ocupado)'). Es la única aparición suelta en todo el repo fuera de .pipeline/ (Grep 'talos-bot($|[^-])'). Los dos criterios se contradicen en la redacción; la implementación sigue a C4, que es lo correcto.",
+      "fix": "En futuros criterios, excluir de forma explícita la mención histórica, por ejemplo 'salvo la nota del paso a'."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/settings.local.example.json",
+      "detail": "La plantilla ahora trae fijo el ID numérico 335185800 (líneas 10 y 12) en lugar del marcador ID_NUMERICO. Para este repo es correcto (C2), pero deja la plantilla atada a esta cuenta. Si T3 (instalador) la copia a otros proyectos, heredarán el email de talos-bot-leon sin aviso.",
+      "fix": "En T3, que el instalador parametrice el nombre y el email del agente o vuelva al marcador."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": null
+}
