@@ -10,6 +10,9 @@ conf() { sed -n "s/^$1=//p" "$repo/.claude/pipeline.conf" 2>/dev/null | tr -d '\
 dueno=$(conf dueno)
 bot=$(conf bot)
 bot_email=$(conf bot_email)
+# Organización donde el agente crea repos y equipo obligatorio (A1).
+org=$(conf org)
+equipo=$(conf equipo)
 ok=0
 fallos=0
 extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas o un gh falso
@@ -22,6 +25,7 @@ trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/base/.claude/hooks"
 cp "$repo"/.claude/hooks/*.sh "$tmp/base/.claude/hooks/"
 cp "$repo/.claude/rutas-gobierno.txt" "$tmp/base/.claude/" 2>/dev/null
+cp "$repo/.claude/pipeline.conf" "$tmp/base/.claude/" 2>/dev/null
 hooks="$tmp/base/.claude/hooks"
 
 # Escapa un texto para meterlo en un string JSON: \, " y saltos de línea.
@@ -337,6 +341,7 @@ echo "== guard-commands.sh: archivo de reglas, con una copia del hook y gh falso
 variante() {
   mkdir -p "$tmp/reglas/$1/.claude/hooks"
   cp "$hooks/guard-commands.sh" "$hooks/_lib.sh" "$tmp/reglas/$1/.claude/hooks/"
+  cp "$hooks/../pipeline.conf" "$tmp/reglas/$1/.claude/" 2>/dev/null
   hooks_alt="$tmp/reglas/$1/.claude/hooks"
   echo "-- $1"
 }
@@ -529,6 +534,26 @@ g permite 'ls C:/Users/dev/proyectos/app/.railway'
 g permite 'cat $USERPROFILE/proyectos/app/.railway/railway.ts'
 g permite 'echo $USERPROFILE'
 
+# repo_prueba <dir> <url de origin> [con-codeowners]: repo git de prueba con un commit y
+# refs/remotes/origin/main en ese commit. Con con-codeowners, el commit trae .github/CODEOWNERS.
+repo_prueba() {
+  mkdir -p "$1" && git -C "$1" init -q 2>/dev/null
+  git -C "$1" remote add origin "$2"
+  if [ "${3:-}" = con-codeowners ]; then
+    mkdir -p "$1/.github"
+    printf '* @%s\n' "$dueno" > "$1/.github/CODEOWNERS"
+  else
+    printf 'x\n' > "$1/README.md"
+  fi
+  git -C "$1" add -A
+  git -C "$1" -c user.name=prueba -c user.email=prueba@example.com commit -qm inicial
+  git -C "$1" update-ref refs/remotes/origin/main HEAD
+}
+repo_prueba "$tmp/dir con espacio" https://github.com/o/r.git
+repo_prueba "$tmp/dir-ssh" git@github.com:o/r.git
+repo_prueba "$tmp/con-codeowners" https://github.com/o/r.git con-codeowners
+repo_prueba "$tmp/sin-codeowners" https://github.com/o/r.git
+
 echo "== guard-commands.sh: identidad del bot $bot (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
 variante_identidad() {
@@ -570,6 +595,17 @@ g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' "identidad d
 g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' "identidad de $bot"
 g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' "identidad de $bot"
 g bloquea 'git -C . push -u origin feat/x' "identidad de $bot"
+# gh repo que escribe cuenta para C4 (A1, C6); en gh repo create y edit, -h es --homepage, no ayuda.
+g bloquea "gh repo create $org/app --private --team $equipo" "identidad de $bot"
+g bloquea "gh repo new $org/app --private --team $equipo" "identidad de $bot"
+g bloquea "gh repo edit $org/app --description x" "identidad de $bot"
+g bloquea "gh repo edit $org/app -h https://x.cl" "identidad de $bot"
+g bloquea "gh repo rename nuevo -R $org/app --yes" "identidad de $bot"
+g bloquea "gh repo archive $org/app --yes" "identidad de $bot"
+g bloquea "gh repo unarchive $org/app --yes" "identidad de $bot"
+g bloquea 'gh repo sync' "identidad de $bot"
+g permite 'gh repo create --help'
+g permite "gh repo view $org/app --json visibility"
 g permite 'gh api -XGET repos/{owner}/{repo}/pulls/5'
 g permite 'gh api --method=GET repos/{owner}/{repo}/pulls/5'
 g permite 'git status'
@@ -593,6 +629,14 @@ g bloquea 'gh pr merge 102 --squash' 'ruta de gobierno CLAUDE.md'
 g bloquea 'git push -u remoto-inexistente feat/x' 'no es HTTPS'
 g bloquea 'git push git@github.com:leon2995/pipeline-prueba.git feat/x' 'no es HTTPS'
 g bloquea 'git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x' 'no es HTTPS'
+g permite "gh repo create $org/app --private --team $equipo"
+g permite "gh repo edit $org/app -h https://x.cl"
+g bloquea "gh repo create $org/app --public --team $equipo" '(repos)'
+echo "-- git -C <dir> push: el remoto se resuelve en <dir> (A1, C6)"
+g permite "git -C \"$tmp/dir con espacio\" push origin feat/x"
+g bloquea "git -C \"$tmp/dir-ssh\" push origin feat/x" 'no es HTTPS'
+g bloquea "git -C $tmp/dir-ssh push -u origin feat/x" 'no es HTTPS'
+g bloquea "git -C \"$tmp/no-existe\" push origin feat/x" 'no existe'
 echo "-- remoto de git push: redirecciones, texto entre comillas y opciones con valor (remoto-git-push)"
 g permite 'git push'
 g permite 'git push 2>&1 | tail -3'
@@ -623,7 +667,6 @@ g bloquea 'git push --repo git@github.com:o/r.git' 'no es HTTPS'
 g bloquea 'git push --repo=https://leon2995@github.com/o/r.git' 'no es HTTPS'
 g bloquea 'git push --repo=origin feat/x' 'no es HTTPS'
 g permite 'git -C . push -u origin feat/x'
-g permite 'git -C "a b" push origin feat/x'
 g permite 'git -c core.x=y push origin feat/x'
 g bloquea 'git -C . push git@github.com:o/r.git feat/x' 'no es HTTPS'
 g permite '(cd . && git push)'
@@ -659,6 +702,260 @@ extra_path=""
 echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de $bot"
 g permite 'git commit -m x'
 g permite 'git push -u origin feat/x'
+
+echo "== guard-commands.sh: repos en la organización $org (A1)"
+org_may=$(printf '%s' "$org" | tr '[:lower:]' '[:upper:]')
+equipo_may=$(printf '%s' "$equipo" | tr '[:lower:]' '[:upper:]')
+echo "-- gh repo create: solo $org/<nombre>, --private y --team $equipo (C1)"
+for c in \
+  "gh repo create $org/app --private --team $equipo" \
+  "gh repo new $org/app --private --team $equipo" \
+  "gh repo create $org/app --private -t $equipo --add-readme" \
+  "gh repo create $org/app --team=$equipo --private --add-readme --disable-wiki --disable-issues" \
+  "gh repo create $org_may/App.v2_x --private --team $equipo_may" \
+  "gh repo create $org/app --private --team $equipo -d \"API; v1 & más\"" \
+  "gh repo create $org/app --private --team $equipo --description='x --public y'" \
+  "gh repo create $org/app --private --team $equipo -g Node -l mit" \
+  "gh repo create $org/app --private --team $equipo --gitignore=Node --license=mit" \
+  "gh repo create $org/app --private --team $equipo 2>&1 | tail -3" \
+  "gh repo create $org/app --private --team $equipo > salida.txt" \
+  'gh repo create --help' 'gh repo new --help'; do
+  g permite "$c"
+done
+for c in \
+  "gh repo create $org/app --public --team $equipo" \
+  "gh repo new $org/app --public --team $equipo" \
+  "gh repo create $org/app --team $equipo" \
+  'gh repo create' \
+  'gh repo new' \
+  "gh repo create $org/app --internal --private --team $equipo" \
+  "gh repo create $org/app --private=false --team $equipo" \
+  "gh repo create $org/app --private=true --team $equipo" \
+  "gh repo create $org/app --private --private --team $equipo" \
+  "gh repo create $org/app --private --public --team $equipo" \
+  "gh repo create $org/app --private --public=false --team $equipo" \
+  "gh repo create app --private --team $equipo" \
+  "gh repo create $bot/app --private --team $equipo" \
+  "gh repo create $dueno/app --private --team $equipo" \
+  "gh repo create otra-org/app --private --team $equipo" \
+  "gh repo create $org-x/app --private --team $equipo" \
+  "gh repo create github.com/$org/app --private --team $equipo" \
+  "gh repo create https://github.com/$org/app --private --team $equipo" \
+  "gh repo create $org/. --private --team $equipo" \
+  "gh repo create $org/.. --private --team $equipo" \
+  "gh repo create $org/a/b --private --team $equipo" \
+  "gh repo create $org/ --private --team $equipo" \
+  "gh repo create $org/app otra --private --team $equipo" \
+  "gh repo create --private --team $equipo --source=. --push" \
+  "gh repo create $org/app --private --team $equipo --source=. --push" \
+  "gh repo create $org/app --private --team $equipo -s . --push" \
+  "gh repo create $org/app --private --team $equipo --clone" \
+  "gh repo create $org/app --private --team $equipo -c" \
+  "gh repo create $org/app --private --team $equipo -r origin" \
+  "gh repo create $org/app --private --team $equipo --remote=origin" \
+  "gh repo create $org/app --private --team $equipo -p $org/plantilla" \
+  "gh repo create $org/app --private --team $equipo --template $org/plantilla --include-all-branches" \
+  "gh repo create $org/app --private --team $equipo -h https://x.cl" \
+  "gh repo create $org/app --private --team $equipo --homepage https://x.cl" \
+  "gh repo create $org/app --private --team $equipo --otra-opcion" \
+  "gh repo create $org/app --private --team $equipo -dx" \
+  "gh repo create $org/app --private --team $equipo -d=x" \
+  "gh repo create $org/app --private --team $equipo --add-readme=false" \
+  "gh repo create $org/app --private --team $equipo -- --public" \
+  "gh repo create $org/app --private --team $equipo -d" \
+  "gh repo create $org/app --private" \
+  "gh repo create $org/app --private --team otro-equipo" \
+  "gh repo create $org/app --private -t otro-equipo" \
+  "gh repo create $org/app --private --team=otro-equipo" \
+  "gh repo create $org/app --private --team $equipo --team otro" \
+  "gh repo create $org/app --private --team $equipo --team $equipo" \
+  "gh repo create $org/app --private --team" \
+  "gh repo create \"\$N\" --private --team $equipo" \
+  "gh repo create $org/\$N --private --team $equipo" \
+  "gh repo create $org/\`n\` --private --team $equipo" \
+  "gh repo create $org/app --private --team \$E" \
+  "gh repo create $org/app --private --team $equipo -d \"sin cerrar" \
+  "GH_HOST=x gh repo create $org/app --private --team $equipo" \
+  "GH_REPO=$org/app gh repo create $org/app --private --team $equipo" \
+  "gh repo create $org/a --private --team $equipo && gh repo create $org/b --private --team $equipo" \
+  "gh repo create $org/a --private --team $equipo; gh repo new $org/b --private --team $equipo" \
+  "bash -c \"gh repo create $org/app --public\"" \
+  "bash -c 'gh repo create $org/app --private --team $equipo'" \
+  "eval gh repo create $org/app --public" \
+  "gh.exe repo create $org/app --public" \
+  "/usr/bin/gh repo create $org/app --public" \
+  "echo \"\$(gh repo create $org/app --public)\"" \
+  "x=\$(gh repo create $org/app --public)" \
+  "(gh repo create $org/app --public)" \
+  "gh repo create $org/app --public # gh repo create $org/app --private --team $equipo"; do
+  g bloquea "$c" '(repos)'
+done
+echo "-- gh repo edit: sin visibilidad, rama por defecto ni forks (C2)"
+for c in \
+  "gh repo edit $org/app --description x" \
+  "gh repo edit $org/app --delete-branch-on-merge --enable-squash-merge" \
+  "gh repo edit $org/app --allow-forking=false" \
+  "gh repo edit $org/app -h https://x.cl" \
+  "gh repo edit --enable-auto-merge=false" \
+  "gh repo edit $org/app -d \"no usar --visibility aquí\"" \
+  'gh repo edit --help'; do
+  g permite "$c"
+done
+for c in \
+  "gh repo edit $org/app --visibility public --accept-visibility-change-consequences" \
+  'gh repo edit --visibility=private --accept-visibility-change-consequences' \
+  "gh repo edit $org/app --visibility private" \
+  "gh repo edit $org/app --visibility=internal" \
+  "gh repo edit $org/app --accept-visibility-change-consequences" \
+  "gh repo edit $org/app --accept-visibility-change-consequences=true" \
+  "gh repo edit $org/app --default-branch staging" \
+  "gh repo edit $org/app --default-branch=staging" \
+  "gh repo edit $org/app --allow-forking" \
+  "gh repo edit $org/app --allow-forking=true" \
+  'gh repo edit' \
+  "gh repo edit $org/app" \
+  "gh repo edit $org/app -d x --visibility public" \
+  "bash -c \"gh repo edit $org/app --visibility public\""; do
+  g bloquea "$c" '(repos)'
+done
+echo "-- fork, delete, deploy keys, alias y extensiones (C3)"
+for c in \
+  "gh repo fork cli/cli --org $org" \
+  'gh repo fork' \
+  "gh repo fork $org/app --clone" \
+  "gh repo delete $org/app --yes" \
+  'gh repo delete' \
+  "gh repo deploy-key add k.pub -R $org/app" \
+  "gh repo deploy-key add k.pub -R $org/app --allow-write" \
+  "gh alias set rc 'repo create --public'" \
+  'gh alias import alias.yml' \
+  'gh extension install x/gh-y' \
+  'gh ext install x/gh-y' \
+  'gh extensions upgrade --all' \
+  'gh extension exec y' \
+  "bash -c 'gh alias set x y'"; do
+  g bloquea "$c" '(repos)'
+done
+for c in \
+  "gh repo view $org/app --json visibility" \
+  "gh repo list $org --visibility public --limit 1000 --json nameWithOwner" \
+  "gh repo list $bot --visibility public --json nameWithOwner --jq '.[].nameWithOwner'" \
+  "gh repo clone $org/app" \
+  "gh repo deploy-key list -R $org/app" \
+  "gh repo rename nuevo -R $org/app --yes" \
+  "gh repo archive $org/app --yes" \
+  'gh repo view --help' \
+  'gh alias list' \
+  'gh extension list' \
+  'gh ext list'; do
+  g permite "$c"
+done
+echo "-- gh api de escritura hacia creación, visibilidad o exposición del repo (C4)"
+for c in \
+  "gh api -X PATCH repos/$org/app -f visibility=public" \
+  "gh api --method=patch /repos/$org/app -F private=false" \
+  "gh api -XPATCH 'repos/{owner}/{repo}' --input body.json" \
+  "gh api https://api.github.com/repos/$org/app -X PATCH -f visibility=public" \
+  "gh api repos/$org/APP -X Patch -f visibility=public" \
+  "gh api -X DELETE repos/$org/app" \
+  "gh api -X PUT repos/$org/app -f x=1" \
+  "gh api -X \"\$M\" repos/$org/app" \
+  "gh api --method GET repos/$org/app -X DELETE" \
+  "gh api orgs/$org/repos -f name=app -F private=true" \
+  "gh api 'orgs/$org/repos?a=1&b=2' -X POST -f name=x" \
+  "gh api user/repos -f name=app" \
+  "gh api /user/repos -X POST -f name=app -F private=true" \
+  'gh api -X POST user/codespaces/abc/publish -f name=app' \
+  "gh api repos/$org/plantilla/generate -f owner=$org -f name=app" \
+  "gh api -X POST repos/cli/cli/forks -f organization=$org" \
+  "gh api repos/$org/app/transfer -f new_owner=$bot" \
+  "gh api -X POST repos/$org/app/pages -f 'source[branch]=main'" \
+  "gh api -X PUT repos/$org/app/pages -f cname=x" \
+  "gh api -X PUT repos/$org/app/collaborators/alguien -f permission=push" \
+  "gh api -X PATCH repos/$org/app/invitations/5 -f permissions=admin" \
+  "gh api repos/$org/app/keys -f key=x -F read_only=false" \
+  "gh api repos/$org/app/hooks -f name=web" \
+  "gh api repos/$org/app/rulesets --input r.json" \
+  "gh api -X POST repos/$org/app/git/refs -f ref=refs/heads/staging -f sha=abc" \
+  "gh api -X PATCH repos/$org/app/git/refs/heads/staging -f sha=abc" \
+  "gh api -X POST repos/$org/app/branches/staging/rename -f new_name=x" \
+  "gh api -X DELETE repos/$org/app/branches/main/protection" \
+  "gh api -X PUT repos/$org/app/branches/main/protection --input p.json" \
+  "gh api -X PATCH orgs/$org -F members_can_create_pages=true" \
+  "gh api -X PATCH orgs/$org/teams/$equipo -f privacy=closed" \
+  "gh api -X PUT orgs/$org/teams/$equipo/repos/$org/app -f permission=admin" \
+  "gh api orgs/$org/rulesets --input r.json" \
+  "gh api -X PUT orgs/$org/rulesets/1 --input r.json" \
+  "gh api -X POST \"\$URL\" -f x=1" \
+  'gh api -f x=1' \
+  "gh api -X POST repos/$org/app/issues extra -f x=1" \
+  "gh api graphql -f query='mutation{createRepository(input:{name:\"app\",visibility:PUBLIC}){repository{url}}}'" \
+  "gh api graphql -f 'query=Mutation { updateTeam }'" \
+  'gh api graphql -F query=@m.graphql' \
+  'gh api graphql -Fquery=@m.graphql' \
+  'gh api graphql --input q.json' \
+  "bash -c \"gh api -X PATCH repos/$org/app -f visibility=public\"" \
+  "echo \"\$(gh api -X DELETE repos/o/r)\""; do
+  g bloquea "$c" '(repos)'
+done
+for c in \
+  "gh api repos/$org/app --jq .visibility" \
+  "gh api -X GET repos/$org/app" \
+  "gh api \"orgs/$org/repos?type=public&per_page=100\" --paginate --jq '.[].full_name'" \
+  "gh api orgs/$org/rulesets" \
+  "gh api repos/$org/app/rules/branches/main" \
+  "gh api -X GET repos/$org/app/pages" \
+  "gh api repos/$org/app/branches/main --jq .commit.sha" \
+  "sha=\$(gh api repos/$org/app/branches/main --jq .commit.sha)" \
+  "gh api graphql -f query='query{organization(login:\"x\"){repositories(first:1,privacy:PUBLIC){nodes{nameWithOwner}}}}'" \
+  'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' \
+  'gh api -X PATCH repos/{owner}/{repo}/pulls/5 -f title=x' \
+  "gh api repos/{owner}/{repo}/pulls/5/files --paginate --jq '.[].filename'" \
+  "gh api -X POST repos/{owner}/{repo}/pulls/5/requested_reviewers -f 'reviewers[]=$dueno'" \
+  'gh api --help'; do
+  g permite "$c"
+done
+echo "-- red textual: el texto de gh repo o gh api dentro de un --title o un -m también bloquea (C5, costo aceptado)"
+g bloquea 'gh pr create --title "usa gh repo create" --body-file b.md' '(repos)'
+g bloquea 'git commit -m "llama a gh api"' '(repos)'
+g permite 'gh pr create --title "repos privados en la organización" --body-file b.md'
+echo "-- pipeline.conf sin org o sin equipo (C8)"
+variante sin-org
+printf 'dueno=%s\nbot=%s\nequipo=%s\n' "$dueno" "$bot" "$equipo" > "$tmp/reglas/sin-org/.claude/pipeline.conf"
+g bloquea "gh repo create $org/app --private --team $equipo" 'pipeline.conf'
+variante sin-equipo
+printf 'dueno=%s\nbot=%s\norg=%s\n' "$dueno" "$bot" "$org" > "$tmp/reglas/sin-equipo/.claude/pipeline.conf"
+g bloquea "gh repo create $org/app --private --team $equipo" 'pipeline.conf'
+hooks_alt=""
+echo "-- rama staging: solo desde origin/main y con CODEOWNERS (C7)"
+g permite "git -C $tmp/con-codeowners push origin origin/main:refs/heads/staging"
+g permite "git -C $tmp/con-codeowners push origin origin/main:staging"
+g permite "git -C \"$tmp/con-codeowners\" push origin 'origin/main:refs/heads/staging'"
+for c in \
+  "git -C $tmp/sin-codeowners push origin origin/main:refs/heads/staging" \
+  "git -C $tmp/sin-codeowners push origin origin/main:staging" \
+  "git -C $tmp/no-existe push origin origin/main:staging" \
+  "git -C $tmp/con-codeowners push otro origin/main:staging" \
+  "git -C $tmp/con-codeowners push origin HEAD:staging" \
+  'git push origin staging' \
+  'git push origin "staging"' \
+  'git push -u origin staging' \
+  'git push origin HEAD:staging' \
+  'git push origin feat/x:refs/heads/staging' \
+  'git push origin feat/x:STAGING' \
+  'git push -u origin feat/x staging' \
+  'git push origin origin/feat:staging' \
+  'git push origin main:staging'; do
+  g bloquea "$c" '(staging)'
+done
+for c in 'git push --all origin' 'git push --all' 'git push --branches origin' 'git push --al origin' \
+  "git push origin 'refs/heads/*:refs/heads/*'" 'git push origin "*:*"'; do
+  g bloquea "$c" 'todas las ramas'
+done
+for c in 'git push origin feat/staging-fix' 'git push origin staging:feat/x' 'git push --atomic origin feat/x' \
+  'git push -u origin fix/staging' 'git push --tags origin'; do
+  g permite "$c"
+done
 
 echo "== CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)"
 # recortar <texto>: sin \r ni espacios al inicio y al final.
@@ -761,6 +1058,9 @@ chequeo pasa 'pipeline.conf define dueno' test -n "$dueno"
 chequeo pasa 'pipeline.conf define bot' test -n "$bot"
 chequeo pasa 'pipeline.conf define bot_email' test -n "$bot_email"
 chequeo pasa 'el email del bot es el noreply del bot' test "${bot_email#*+}" = "$bot@users.noreply.github.com"
+# pipeline.conf (A1): la organización donde el agente crea repos y el equipo obligatorio.
+chequeo pasa 'pipeline.conf define org' test -n "$org"
+chequeo pasa 'pipeline.conf define equipo' test -n "$equipo"
 p="$repo/.claude/settings.local.example.json"
 # jq es obligatorio para estos chequeos: sin jq la suite falla en lugar de saltárselos.
 chequeo pasa 'jq está instalado (requerido por los chequeos de la plantilla)' command -v jq
