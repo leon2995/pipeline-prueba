@@ -815,12 +815,28 @@ chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (tabla de roles
 chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (Memoria del sistema)' tiene_texto 'el engineer nunca recibe las pendientes' "$cl"
 chequeo pasa 'CLAUDE.md: el new_lesson de Codex también va a pendientes' tiene_texto 'Si Codex trae `new_lesson`, también va a `.pipeline/lecciones-pendientes.md`' "$cl"
 chequeo pasa 'CLAUDE.md: el router dice que el proceso ligero no ejecuta JEV' tiene_texto 'En el proceso ligero no se ejecuta JEV' "$cl"
-chequeo pasa 'SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager' tiene_texto 'y `git credential-manager`, salvo `github list`' "$repo/SETUP.md"
+# SETUP.md es la guía de este repo; el instalador no la copia a los repos instalados (T3b, C2).
+if [ -f "$repo/SETUP.md" ]; then
+  chequeo pasa 'SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager' tiene_texto 'y `git credential-manager`, salvo `github list`' "$repo/SETUP.md"
+else
+  echo "omitido: no hay SETUP.md (repo instalado)"
+fi
 chequeo pasa 'CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno' tiene_texto 'una ronda del auditor Claude y la aprobación de Leonardo como code owner' "$cl"
 chequeo pasa 'CLAUDE.md: el proceso ligero exige code owners activo en staging y main' tiene_texto 'protección con code owners esté activa en `staging` y `main`' "$cl"
 chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$au"
 chequeo pasa 'auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$ac"
 chequeo pasa 'auditor.md: el new_lesson va a lecciones pendientes' tiene_texto '.pipeline/lecciones-pendientes.md' "$au"
+# Repos instalados (instalable): el hook Stop del engineer tiene tiempo para npm test en Windows.
+# Solo dentro del frontmatter y con la misma sangría que el command: de run-tests.sh (la clave
+# timeout de ese hook); un timeout en otro nivel lo ignora Claude Code.
+stop_timeout() {
+  tr -d '\r' < "$repo/.claude/agents/engineer.md" | awk '
+    NR == 1 && /^---/ { fm = 1; next }
+    fm && /^---/ { exit }
+    fm && /command:.*run-tests\.sh/ { match($0, /^ */); ind = RLENGTH; f = 1; next }
+    fm && f && /^ *timeout:/ { match($0, /^ */); if (RLENGTH == ind) print; exit }' | grep -Eq 'timeout: *600$'
+}
+chequeo pasa 'engineer.md: el hook Stop declara timeout: 600' stop_timeout
 # Flujo del engineer en worktrees (T3a).
 chequeo pasa 'engineer.md: en su worktree hace git switch a la rama de la subtarea' tiene_texto 'git switch <rama>' "$repo/.claude/agents/engineer.md"
 chequeo pasa 'CLAUDE.md: el CTO no deja activa la rama de la subtarea en su checkout' tiene_texto 'no la dejes activa en tu checkout' "$cl"

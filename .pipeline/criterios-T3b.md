@@ -41,7 +41,9 @@ Riesgo: **bajo**. Es un script local que copia archivos a otro repo y crea una r
 
   Valores por defecto: `<servicio>` es el nombre del repo; `<repo>` sale de la URL de `origin` (`https://github.com/<dueño>/<repo>.git`) o, sin `origin`, del nombre de la carpeta del destino.
 - **C5. Modos.**
-  - **Detección:** un repo sin archivos versionados, o solo con `README*`, `LICENSE*`, `.gitignore` o `.gitattributes`, es `nuevo`; con cualquier otro archivo versionado es `existente`. `--modo` fuerza el modo.
+  - **Detección:** para decidir el modo no cuentan las rutas del manifiesto ni las que genera el instalador (`.pipeline/lecciones-pendientes.md`, `.pipeline/plan.json`, `.pipeline/criterios-T1.md`, `.railway/railway.ts`). De los archivos versionados que quedan, un repo sin ninguno, o solo con `README*`, `LICENSE*`, `.gitignore` o `.gitattributes` en la raíz (sin distinguir mayúsculas), es `nuevo`. Con cualquier otro es `existente`. `--modo` fuerza el modo.
+    - Consecuencia: una corrida sobre un repo que ya tiene el framework commiteado sigue en `modo nuevo` y deja todo `igual`.
+    - *Cambio aceptado por Leonardo después del PR #16:* el engineer eligió este comportamiento y el criterio original contaba cualquier archivo versionado.
   - **Modo nuevo:** `plan.json` queda con la plantilla vacía de subtareas.
   - **Modo existente:** `plan.json` trae una subtarea T1 "ADR del stack actual", con el archivo esperado `docs/adr/0001-stack-actual.md`, y se genera `.pipeline/criterios-T1.md` con criterios verificables para ese ADR. Los criterios nombran los manifiestos detectados en el destino (`package.json`, `pyproject.toml`, `go.mod`, `requirements.txt`, `Cargo.toml`, `Gemfile`, `Dockerfile`) como pista.
 - **C6. Rama `staging`.** Con `--aplicar`:

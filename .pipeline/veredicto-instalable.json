@@ -1,0 +1,27 @@
+{
+  "task": "instalable",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh",
+      "detail": "C2: stop_timeout (awk '/run-tests\\.sh/ { f = 1; next } f && /timeout:/ { print; exit }') toma la primera línea con 'timeout:' después de run-tests.sh en cualquier parte del archivo y no mira ni la sangría ni el límite del frontmatter. Si alguien pone 'timeout: 600' al nivel de 'Stop:' o de '- hooks:', Claude Code lo ignora y el chequeo sigue en verde. Lo mismo pasa si falta en el frontmatter y el cuerpo tiene una línea en prosa que termina en 'timeout: 600'. La forma actual es correcta: engineer.md:23 está en la misma sangría que 'command:' (líneas 21 a 23), dentro del hook de tipo command, y el valor es entero en segundos.",
+      "fix": "Limitar el awk al frontmatter (entre los dos '---') y exigir que la línea 'timeout:' tenga la misma sangría que la línea 'command:' de run-tests.sh."
+    },
+    {
+      "severity": "baja",
+      "file": ".pipeline/criterios-T3b.md",
+      "detail": "C3: el C5 nuevo coincide con detectar_modo (instalador/instalar.sh:395-408): se saltan GESTIONADOS (manifiesto más GENERADOS, línea 36) y después es_archivo_de_repo_nuevo. Pero el texto omite dos matices del código (líneas 180-190): la excepción vale solo en la raíz ('*/*' devuelve 1) y no distingue mayúsculas. Ejemplo: un repo con solo 'docs/README.md' queda en 'existente', y el criterio no deja ver por qué. El criterio original ya tenía esta omisión.",
+      "fix": "Agregar 'en la raíz, sin distinguir mayúsculas' después de la lista README*, LICENSE*, .gitignore, .gitattributes."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/readonly-guard.sh",
+      "detail": "No pude correr la suite: readonly-guard bloqueó 'bash scripts/test-hooks.sh', aunque auditor.md dice que el auditor puede correrla. Sin eso, C1 y C4 descansan en .pipeline/test-hooks-salida.txt (637 ok, con la línea 611 'SETUP.md: el remedio del paso c' en verde) y en la evidencia (636 ok en la copia sin SETUP.md). Verifiqué por lectura estas tres cosas: el if [ -f \"$repo/SETUP.md\" ] (test-hooks.sh:819-823); que SETUP.md:127 tiene el texto exacto, así que en este repo el chequeo corre y pasa, y el condicional no esconde un fallo; y que test-hooks.sh no lee otro archivo que quede fuera de instalador/manifiesto.txt, porque tests/, instalador/ y package.json solo aparecen como cadenas de entrada de los casos. No verifiqué por mi cuenta el CI con gawk y mawk. Esto no es un defecto del diff.",
+      "fix": "Fuera del alcance de este PR: agregar 'bash scripts/test-hooks.sh' a la lista de permitidos de readonly-guard.sh en un PR de gobierno aparte, o que el CTO adjunte en la evidencia el enlace al run de CI."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Un chequeo que verifica una clave YAML del frontmatter con grep o awk lineal debe acotar el frontmatter y la sangría; si no, la clave mal ubicada (que Claude Code ignora) pasa el chequeo."
+}

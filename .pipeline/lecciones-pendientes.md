@@ -14,6 +14,7 @@ Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archiv
 - [2026-09-28] [lecciones-1] PR de lecciones: descartar una pendiente porque 'ya está documentada en X' exige citar la línea de X que la cubre; si no existe, el patrón sale del repo sin rastro. El historial debe listar cada descartada con su veredicto de origen. (PR #14, `veredicto-lecciones-1.json`)
 - [2026-09-28] [T3a] Una lista de permitidos que detecta el comando por la primera palabra del segmento tiene que saltar las palabras clave de shell (if, then, do, !, {) y los envoltorios comunes (timeout, xargs). Si no, retira sin avisar la cobertura que daba el grep textual al que reemplaza. (PR #15, `veredicto-T3a.json`)
 - [2026-09-29] [T3b] Cuando el manifiesto de un instalador excluye archivos del repo fuente, comprobar que las suites copiadas (test-hooks.sh, CI) no lean esos archivos; si los leen, el repo instalado nace con checks obligatorios en rojo. (PR #16, `veredicto-T3b.json`)
+- [2026-09-29] [instalable] Un chequeo que verifica una clave YAML del frontmatter con grep o awk lineal debe acotar el frontmatter y la sangría; si no, la clave mal ubicada (que Claude Code ignora) pasa el chequeo. (PR #17, `veredicto-instalable.json`)
 
 ## Historial
 

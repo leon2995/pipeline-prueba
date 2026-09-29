@@ -614,6 +614,7 @@ ok     pasa     CLAUDE.md: el proceso ligero exige code owners activo en staging
 ok     pasa     auditor.md: evasiones fuera del modelo de amenaza con severidad baja
 ok     pasa     auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja
 ok     pasa     auditor.md: el new_lesson va a lecciones pendientes
+ok     pasa     engineer.md: el hook Stop declara timeout: 600
 ok     pasa     engineer.md: en su worktree hace git switch a la rama de la subtarea
 ok     pasa     CLAUDE.md: el CTO no deja activa la rama de la subtarea en su checkout
 == readonly-guard.sh (auditor)
@@ -681,4 +682,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-636 ok, 0 fallos
+637 ok, 0 fallos
