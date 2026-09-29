@@ -9,12 +9,41 @@ Aquí van los `new_lesson` de los auditores (Claude y Codex), textuales y con su
 
 Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archivo del veredicto)`. El texto del patrón es el del auditor. Si el original no trae el prefijo `[fecha] [subtarea]`, lo agrega el CTO.
 
-Criterio de Leonardo para el PR de lecciones: a `LESSONS.md` van como máximo 5 lecciones generales por PR, y se descartan las específicas del hook, que ya viven en el encabezado de `guard-commands.sh`.
-
 ## Pendientes
 
-Ninguna.
+- [2026-09-28] [lecciones-1] PR de lecciones: descartar una pendiente porque 'ya está documentada en X' exige citar la línea de X que la cubre; si no existe, el patrón sale del repo sin rastro. El historial debe listar cada descartada con su veredicto de origen. (PR de lecciones-1, `veredicto-lecciones-1.json`)
 
 ## Historial
 
-- 2026-09-28, primer PR de lecciones: de 16 pendientes (PRs #4, #6, #10, #11 y #13), 8 se condensaron en 5 lecciones de `LESSONS.md` y se descartaron 8 específicas del hook. El detalle, con el texto original de cada una, está en el cuerpo del PR y en los `veredicto-*.json` citados.
+### 2026-09-28: antes del flujo de lecciones
+
+Quedaron fuera las lecciones de los PRs #1 y #2 (hook-force-push y audit-codex-stdin). Leonardo decidió dejar en `LESSONS.md` solo las dos lecciones generales de esa época, y no llevar la de las citas.
+
+### 2026-09-28: primer PR de lecciones (lecciones-1)
+
+Criterio de Leonardo para este PR: proponer como máximo 5 lecciones generales para `LESSONS.md` y descartar las específicas del hook, que ya están documentadas en `guard-commands.sh`. Las líneas citadas son de `staging` en `ba8ed7c`.
+
+**Condensadas en `LESSONS.md` (8 pendientes en 5 lecciones):**
+- "documentar contra la herramienta real" viene de 3 pendientes:
+  - #6, `veredicto-cuenta-agente-intento1.json` (docs de verificación);
+  - #6, `veredicto-cuenta-agente-intento2.json`, segunda lección (docs de credenciales);
+  - #11, `veredicto-vencimiento-token.json` (docs que afirman un control).
+- "controles fail-closed": #6, `veredicto-codex-cuenta-agente-intento2.json`.
+- "dos cuentas en una máquina" viene de 2 pendientes:
+  - #6, `veredicto-cuenta-agente.json`, primera lección (login de una segunda cuenta);
+  - #11, `veredicto-vencimiento-token-intento1.json` (prefijo del bot).
+- "excepciones al protocolo": #13, `veredicto-lecciones.json`.
+- "pruebas de reglas nuevas": #10, `veredicto-remoto-git-push.json`, segunda mitad. La primera mitad se descarta abajo.
+
+**Descartadas por específicas del hook (8 pendientes, más la primera mitad de la de #10), con dónde quedan cubiertas en `guard-commands.sh`:**
+
+| PR | Veredicto | Pendiente | Cobertura |
+|---|---|---|---|
+| #4 | `veredicto-hooks-windows-y-gobierno-intento1.json` | hook de compuerta: objetivo implícito | Línea 386 (número explícito) y el mensaje de la línea 489 |
+| #4 | `veredicto-codex-hooks-windows-y-gobierno-intento1.json` | flags booleanos también con valor (`--flag=true`, `-f=true`) | Código, líneas 466 a 481 (`--admin=*`, `--delete-branch=*`, `grupo%%=*`), y los casos `-d=true` y `--delete-branch=true` de `test-hooks.sh`. Sin comentario propio |
+| #4 | `veredicto-hooks-windows-y-gobierno.json` | matcher "Bash" y PowerShell | Líneas 395 y 396 |
+| #4 | `veredicto-codex-hooks-windows-y-gobierno.json` | número de PR y `cd`/`pushd` | Líneas 393 y 394 |
+| #6 | `veredicto-codex-cuenta-agente-intento1.json` | análisis por segmento y opciones globales | Líneas 276 y 277, y la definición de `F` (líneas 61 a 64) |
+| #6 | `veredicto-cuenta-agente-intento2.json`, primera lección | excepción por flag solo fuera de comillas | Línea 293 |
+| #6 | `veredicto-cuenta-agente.json`, segunda lección, y `veredicto-codex-cuenta-agente.json` | argumentos del subcomando: redirecciones, comillas y opciones con valor | Bloque del remoto de `git push`, líneas 318 a 377 |
+| #10 | `veredicto-remoto-git-push.json`, primera mitad | `(` y `)` pegados a los tokens | Línea 338 |
