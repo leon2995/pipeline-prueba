@@ -48,6 +48,10 @@ cmd=$(printf '%s' "$input" | json_get command)
 # - git push: sin remoto ni --repo se asume origin (no se miran branch.<rama>.pushRemote ni
 #   remote.pushDefault) y el remoto se resuelve en el directorio del hook, no en el de un cd previo.
 #   El paso f exige un solo remoto, origin, en HTTPS;
+# - git push (remoto-git-push): las comillas se quitan primero las dobles y después las simples, así
+#   que una " dentro de un valor entre comillas simples antes del git (V='a"b' git push "x") esconde
+#   el push; y las opciones largas solo se reconocen con el nombre completo (--push-opt o --rep=,
+#   prefijos que git acepta, no se leen como opciones con valor);
 # - C4 compara el nombre del autor y del committer, no el email (el paso f lo verifica con git var);
 # - C4 revisa git commit, git push, los gh pr que escriben y gh api de escritura; gh issue, gh run
 #   rerun, gh workflow run, gh label y gh release no se revisan, y gh api .../reviews con
@@ -312,9 +316,11 @@ if [ -e "$archivo_identidad" ]; then
         # primer posicional después de push; si no hay, el valor de --repo; si no, origin (como git).
         remoto="" repo="" estado=0 sigue=""
         while IFS= read -r t; do
+          t=${t#\(}                           # subshell: (git push) o (cd x && git push)
+          t=${t%\)}
           if [ -n "$sigue" ]; then [ "$sigue" = repo ] && repo=$t; sigue=""; continue; fi
           if [ "$estado" = 0 ]; then
-            case "${t#\(}" in git|*/git|git.exe|*/git.exe) estado=1 ;; esac
+            case "$t" in git|*/git|git.exe|*/git.exe) estado=1 ;; esac
           elif [ "$estado" = 1 ]; then
             case "$t" in
               -C|-c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix|--attr-source) sigue=valor ;;

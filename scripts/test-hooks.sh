@@ -528,6 +528,13 @@ g permite 'git push --repo origin'
 g bloquea 'git push --repo git@github.com:o/r.git' 'no es HTTPS'
 g bloquea 'git push --repo=https://leon2995@github.com/o/r.git' 'no es HTTPS'
 g bloquea 'git push --repo=origin feat/x' 'no es HTTPS'
+g permite 'git -C . push -u origin feat/x'
+g permite 'git -C "a b" push origin feat/x'
+g permite 'git -c core.x=y push origin feat/x'
+g bloquea 'git -C . push git@github.com:o/r.git feat/x' 'no es HTTPS'
+g permite '(cd . && git push)'
+g permite '(git push origin feat/x)'
+g bloquea '(git push git@github.com:o/r.git feat/x)' 'no es HTTPS'
 echo "-- identidad incompleta o de otra cuenta"
 talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
 extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=leon2995 GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)

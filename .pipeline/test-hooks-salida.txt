@@ -353,6 +353,13 @@ ok     permite  git push --repo origin
 ok     bloquea  git push --repo git@github.com:o/r.git
 ok     bloquea  git push --repo=https://leon2995@github.com/o/r.git
 ok     bloquea  git push --repo=origin feat/x
+ok     permite  git -C . push -u origin feat/x
+ok     permite  git -C "a b" push origin feat/x
+ok     permite  git -c core.x=y push origin feat/x
+ok     bloquea  git -C . push git@github.com:o/r.git feat/x
+ok     permite  (cd . && git push)
+ok     permite  (git push origin feat/x)
+ok     bloquea  (git push git@github.com:o/r.git feat/x)
 -- identidad incompleta o de otra cuenta
 ok     bloquea  git commit -m x
 ok     bloquea  git commit -m x
@@ -464,4 +471,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-422 ok, 0 fallos
+429 ok, 0 fallos
