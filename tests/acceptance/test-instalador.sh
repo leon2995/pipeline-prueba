@@ -337,6 +337,7 @@ c4_lecciones_pendientes() {
   grep -q "Lecciones pendientes" "$f" || { echo "sin el encabezado del flujo"; return 1; }
   grep -q "Ninguna" "$f" || { echo "sin 'Ninguna' en pendientes"; return 1; }
   grep -q "PR #14" "$f" && { echo "trae el historial de este repo"; return 1; }
+  return 0
 }
 
 c4_plan_json_nuevo() {
@@ -544,6 +545,7 @@ c6_sin_commits_no_crea() {
   salida=$(bash "$instalador" "$d" --aplicar 2>&1)
   contiene "$salida" "rama staging: sin commits" || { echo "no reportó 'rama staging: sin commits'"; return 1; }
   git -C "$d" show-ref --verify --quiet refs/heads/staging && { echo "creó staging sin commits"; return 1; }
+  return 0
 }
 
 c6_no_toca_el_remoto() {
@@ -672,6 +674,7 @@ c7_servicio_y_puerto_reemplazados() {
   contiene "$salida" "railway domain --port 3000 --service miapi --environment production" \
     || { echo "no aplicó --puerto en 'railway domain' de production"; return 1; }
   contiene "$salida" "8080" && { echo "sigue mostrando el puerto por defecto (8080)"; return 1; }
+  return 0
 }
 
 c7_puerto_por_defecto() {
@@ -702,6 +705,7 @@ c8_destino_no_existe() {
   [ "$CODIGO" -eq 2 ] || { echo "código $CODIGO, esperaba 2"; return 1; }
   [ -n "$ERRSAL" ] || { echo "no imprimió nada en stderr"; return 1; }
   [ -e "$d" ] && { echo "creó el destino inexistente"; return 1; }
+  return 0
 }
 
 c8_no_es_repo_git() {
