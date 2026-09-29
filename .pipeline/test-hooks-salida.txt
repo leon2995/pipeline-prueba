@@ -315,7 +315,7 @@ ok     permite  railway list
 ok     permite  railway ls
 ok     permite  railway metrics
 ok     permite  railway docs
-ok     permite  railway environment staging
+ok     permite  railway environment link staging
 ok     permite  railway environment list
 ok     permite  railway env ls
 ok     permite  railway environment config
@@ -349,6 +349,12 @@ ok     permite  grep -rn railway SETUP.md
 ok     permite  cat .railway/railway.ts
 ok     permite  echo railway up
 ok     permite  ls .railway
+ok     permite  if railway status; then echo ok; fi
+ok     permite  for i in 1 2; do railway logs; done
+ok     permite  timeout 30 railway status
+ok     permite  railway ssh --help
+ok     permite  railway run --help
+ok     permite  railway variable set --help
 ok     bloquea  railway up
 ok     bloquea  railway up --detach
 ok     bloquea  railway redeploy
@@ -400,6 +406,22 @@ ok     bloquea  NO_COLOR=1 railway up
 ok     bloquea  (railway up)
 ok     bloquea  git status && railway up
 ok     bloquea  railway status; railway down
+ok     bloquea  railway environment staging
+ok     bloquea  railway env production
+ok     bloquea  for i in 1 2 3; do railway up --detach && break; sleep 10; done
+ok     bloquea  if ! railway up; then echo fallo; fi
+ok     bloquea  then railway redeploy
+ok     bloquea  { railway down; }
+ok     bloquea  while true; do railway restart; done
+ok     bloquea  timeout 600 railway up
+ok     bloquea  xargs -n 1 railway up
+ok     bloquea  nice -n 10 railway up
+ok     bloquea  time railway up
+ok     bloquea  watch -n 5 railway redeploy
+ok     bloquea  railway ssh -- df -h
+ok     bloquea  railway ssh free -h
+ok     bloquea  railway run -- node x.js --help
+ok     bloquea  railway run pytest -V
 ok     bloquea  railway variables --kv
 ok     bloquea  railway vars --kv
 == guard-commands.sh: sesión de Railway de Leonardo (T3a)
@@ -412,8 +434,14 @@ ok     bloquea  ls /c/Users/dev/.railway
 ok     bloquea  grep token .railway/config.json
 ok     bloquea  echo $RAILWAY_TOKEN
 ok     bloquea  RAILWAY_API_TOKEN=x railway status
+ok     bloquea  cat "C:\Users\dev\.railway\config.json"
+ok     bloquea  ls /home/dev/.railway
+ok     bloquea  dir %USERPROFILE%\.railway
+ok     bloquea  ls $USERPROFILE/.railway
 ok     permite  cat .railway/railway.ts
 ok     permite  ls C:/Users/dev/proyectos/app/.railway
+ok     permite  cat $USERPROFILE/proyectos/app/.railway/railway.ts
+ok     permite  echo $USERPROFILE
 == guard-commands.sh: identidad del bot talos-bot-leon (C4), con copia del hook y gh falso
 -- identidad
 -- sin la identidad de talos-bot-leon
@@ -653,4 +681,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-608 ok, 0 fallos
+636 ok, 0 fallos

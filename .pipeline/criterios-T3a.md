@@ -24,7 +24,7 @@ Alcance, según lo pidió Leonardo, en este orden:
 - **C3. Railway, lista de permitidos.** El hook deja pasar solo lecturas cuando el comando del segmento es `railway` (con ruta, `.exe`, `npx @railway/cli`, `VAR=x` antes o dentro de `( )`):
   - `--help`, `-h`, `--version`, `-V` y `help` en cualquier posición;
   - `status`, `whoami`, `logs`, `list` o `ls`, `metrics` y `docs`;
-  - `environment <nombre>`, `environment list|config|link`: el enlace es local y lo usa `/verificar-deploy`;
+  - `environment link|list|ls|config|show|info`: el enlace es local y lo usa `/verificar-deploy`. *Después de la ronda del auditor:* `environment <nombre>` sin `link` pasa a bloquearse, porque la lista es explícita, y `/verificar-deploy` usa `railway environment link <ambiente>`;
   - `service list|status|logs`, `domain list|status`, `deployment list`, `project list`, `volume list`, `variable|variables|vars|var` (listado, con la regla existente de solo nombres, extendida a todos los alias), `usage` y `usage projects`, y `api schema|search|describe`;
   - `config plan` sin `--show-values` ni `--decrypt-variables`, y `config migrate` sin `--apply` ni `--delete-files`.
 

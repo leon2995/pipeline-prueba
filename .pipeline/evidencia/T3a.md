@@ -1,6 +1,17 @@
 # Evidencia: T3a (endurecer el framework antes del instalador)
 
-- **Estado:** listo para la ronda del auditor Claude. Proceso ligero: una ronda, sin Codex ni JEV.
+- **Estado:** auditado. Proceso ligero: una sola ronda del auditor Claude, sin Codex ni JEV.
+  - **Veredicto:** `fail`, con 1 alta, 2 medias y 3 bajas (`.pipeline/veredicto-T3a.json`).
+  - **Todo corregido después de la ronda**, sin volver a auditar porque el proceso ligero es de una ronda. Lo revisa Leonardo como code owner.
+  - **Alta (regresión frente a `staging`):** `railway_args` no veía railway después de palabras clave de shell ni de envoltorios. `for ...; do railway up; done`, `if ! railway up` o `timeout 600 railway up` pasaban. Ahora se saltan `if`, `then`, `else`, `elif`, `do`, `while`, `until`, `!` y `{`, y los envoltorios `time`, `timeout`, `xargs`, `watch`, `nice`, `ionice`, `stdbuf` y `winpty`, con sus opciones y su número o duración.
+  - **Media, ayuda del comando hijo:** un `-h` del comando hijo contaba como ayuda (`railway ssh -- df -h`). Ahora la ayuda cuenta antes de `--` y dentro de las dos primeras palabras. En `run`, `ssh`, `shell`, `connect`, `dev` y `code` cuenta solo justo después del subcomando.
+  - **Media, barras invertidas:** una ruta con barras invertidas (`C:\Users\x\.railway\config.json`) no se detectaba. Ahora el chequeo corre sobre una copia con `\` pasadas a `/`, y suma `/home/<u>/.railway`.
+  - **Bajas:**
+    - `environment` pasa a lista explícita (`link`, `list`, `ls`, `config`, `show`, `info`) y `/verificar-deploy` usa `railway environment link <ambiente>`;
+    - `USERPROFILE` solo cuenta si `.railway` va justo después;
+    - sale la alternativa redundante de `protect-acceptance-tests.sh`.
+  - **Casos nuevos en la suite:** 16 que se bloquean, 6 que pasan y 5 de la sesión. La prueba rápida de las correcciones dio 34 de 34.
+  - **Pendiente de lecciones:** el `new_lesson` de la ronda va a `.pipeline/lecciones-pendientes.md` con el PR de lecciones #14, para no chocar con ese archivo.
 - **Rama:** `feat/T3a-endurecer`, desde `staging` en `ba8ed7c` (con el #13).
 - **Implementó:** el CTO, pruebas e implementación (rutas de gobierno). Commits como `talos-bot-leon`.
 - **Riesgo:** medio.
@@ -32,7 +43,7 @@
 ## Tests
 
 - **Prueba rápida sobre copias de los hooks:** 54 de 54.
-- **Suite:** `608 ok, 0 fallos` (Git Bash, gawk). Salida completa en `.pipeline/test-hooks-salida.txt`.
+- **Suite:** `636 ok, 0 fallos` (Git Bash, gawk) después de las correcciones de la ronda; antes eran `608 ok`. Salida completa en `.pipeline/test-hooks-salida.txt`.
 - **Mutación contra `staging`:** la suite de la rama, con su `pipeline.conf`, contra los hooks, las reglas, los settings, el CI, la plantilla, `CLAUDE.md`, los prompts de auditor y `engineer.md` de `staging`. Resultado: `531 ok, 77 fallos`, exit 1, todos en áreas nuevas:
   - 55 de Railway: escrituras que `staging` permite, `--help` y `echo railway up`, que `staging` bloqueaba de más, y el motivo "Railway";
   - 9 de la sesión de Railway;

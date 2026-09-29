@@ -193,7 +193,7 @@ En cualquier momento: "cambia a paso-a-paso" o "sigue en automatico". El CTO act
 
 ## Notas
 
-- Los flags exactos de la CLI de Railway cambian entre versiones. Si `railway variables --kv` o `railway environment <nombre>` no existen en tu versión, corre `railway --help` y ajusta `.claude/commands/verificar-deploy.md`.
+- Los flags exactos de la CLI de Railway cambian entre versiones. Si `railway variables --kv` o `railway environment link <nombre>` no existen en tu versión, corre `railway --help` y ajusta `.claude/commands/verificar-deploy.md`. El hook solo le deja al agente las lecturas de railway (lista en `guard-commands.sh`); si una lectura nueva que necesitas se bloquea, agrégala a esa lista en un PR de gobierno.
 - `gitleaks-action` es gratis para cuentas personales; para organizaciones pide licencia. Si estorba, quita el job `secrets` y agrega el check de gitleaks como pre-commit local.
 - Los tokens (`gh`, `railway`, `codex`) viven en tu máquina, nunca en el repo. `.env` está en `.gitignore` y bloqueado para todos los agentes. El de `talos-bot-leon` vive en `~/.talos-gh/hosts.yml` (paso 4b.c), con lectura y escritura denegadas al agente.
 

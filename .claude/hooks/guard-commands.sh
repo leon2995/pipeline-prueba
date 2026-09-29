@@ -69,7 +69,9 @@ fi
 # Sesión de Railway de Leonardo (T3a): ~/.railway/config.json guarda su token de la CLI, y
 # RAILWAY_TOKEN o RAILWAY_API_TOKEN serían tokens de proyecto o de cuenta. El .railway/ del repo
 # (railway.ts de IaC) sí se puede leer.
-if printf '%s' "$cmd" | grep -Eq 'RAILWAY_(API_)?TOKEN|~/\.railway|\$\{?HOME\}?/\.railway|/Users/[^/ ]+/\.railway|\.railway/config\.json|USERPROFILE[^ ;&|]*[/\\]\.railway'; then
+# Se revisa una copia con las barras invertidas pasadas a / (C:\Users\x\.railway\config.json).
+sesion_rw=${cmd//\\//}
+if printf '%s' "$sesion_rw" | grep -Eq 'RAILWAY_(API_)?TOKEN|~/\.railway|\$\{?HOME\}?/\.railway|/(Users|home)/[^/ ]+/\.railway|\.railway/config\.json|USERPROFILE%?\}?/\.railway'; then
   bloqueo credenciales "el comando nombra la sesión o un token de Railway (~/.railway, .railway/config.json, RAILWAY_TOKEN, RAILWAY_API_TOKEN). Nómbralos en texto, nunca en un comando."
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[:alnum:]_-]|\$)|${I}gh$F +auth$F +status[^;&|]*( -[a-z]*t[a-z]*( |\$)| --show-token)|${I}git( +[^ ;&|]+)* +credential +(fill|approve|reject)"; then
@@ -266,13 +268,15 @@ done
 # servicios, ambientes, dominios, variables, config apply, login) lo corre Leonardo en su terminal
 # (CLAUDE.md: OK explícito para cualquier railway que no sea de lectura). Lista de permitidos, no de
 # prohibidos: la CLI suma subcomandos casi cada semana. Un segmento invoca railway si su primera
-# palabra (después de "(", VAR=valor y sudo, env, command, exec, time o nohup) es railway, una ruta a
-# railway o railway.exe, o npx con @railway/cli. Un "railway" como argumento (grep, echo, cat
+# palabra es railway, una ruta a railway o railway.exe, o npx con @railway/cli. Antes se saltan "(",
+# las palabras clave de shell (if, then, else, elif, do, while, until, !, {), VAR=valor, sudo, env,
+# command, exec, builtin y nohup, y los envoltorios con sus opciones y su número o duración (time,
+# timeout, xargs, watch, nice, ionice, stdbuf, winpty). Un "railway" como argumento (grep, echo, cat
 # .railway/railway.ts) no cuenta. Límites (fuera del modelo de amenaza): bash -c "railway up",
-# env -u X railway up, variables y alias.
+# env -u X railway up, sudo -u x railway up, variables y alias.
 # railway_args <segmento>: 0 si el segmento invoca railway; deja sus argumentos en rw_args.
 railway_args() {
-  local t primero=1 npx=0
+  local t primero=1 npx=0 envoltorio=0
   rw_args=()
   set -f
   # shellcheck disable=SC2086
@@ -284,33 +288,57 @@ railway_args() {
     if [ "$primero" = 1 ]; then
       case "$t" in
         '') continue ;;
-        *=*|sudo|env|command|exec|time|nohup) continue ;;
+        if|then|else|elif|do|while|until|'!'|'{') continue ;;
+        *=*|sudo|env|command|exec|builtin|nohup) continue ;;
+        time|timeout|xargs|watch|nice|ionice|stdbuf|winpty) envoltorio=1; continue ;;
         npx|pnpx|bunx) npx=1; continue ;;
-        -*) [ "$npx" = 1 ] && continue; return 1 ;;
+        -*) { [ "$npx" = 1 ] || [ "$envoltorio" = 1 ]; } && continue; return 1 ;;
         railway|*/railway|railway.exe|*/railway.exe|*\\railway.exe) primero=0; continue ;;
         @railway/cli|@railway/cli@*) [ "$npx" = 1 ] && { primero=0; continue; }; return 1 ;;
-        *) return 1 ;;
+        *)
+          # El número o la duración de un envoltorio (timeout 600, nice -n 10, xargs -n 1).
+          if [ "$envoltorio" = 1 ] && [ "${t#[0-9]}" != "$t" ] && [ -z "${t//[0-9.smhd]/}" ]; then continue; fi
+          return 1 ;;
       esac
     fi
     rw_args+=("${t%)}")
   done
   [ "$primero" = 0 ]
 }
-# railway_lectura: 0 si rw_args es una lectura. Subcomando y sub-subcomando son las dos primeras
-# palabras que no empiezan con -.
+# railway_lectura: 0 si rw_args es una lectura. El subcomando y el sub-subcomando son las dos
+# primeras palabras que no empiezan con -, antes de "--".
+# La ayuda (--help, -h, --version, -V) no ejecuta nada. Cuenta antes de "--" y dentro de las dos
+# primeras palabras. En run, local, ssh, shell, connect, dev y code, lo que sigue al subcomando es
+# del comando hijo (railway ssh -- df -h, railway ssh free -h): ahí solo cuenta justo después.
 railway_lectura() {
-  local a sub="" sub2=""
+  local a sub="" sub2="" pos=0 i=0 isub=0 hijo=0
   for a in ${rw_args[@]+"${rw_args[@]}"}; do
-    case "$a" in --help|-h|--version|-V) return 0 ;; esac
+    i=$((i + 1))
+    [ "$a" = -- ] && break
+    case "$a" in
+      --help|-h|--version|-V)
+        if [ "$hijo" = 1 ]; then
+          [ "$i" -eq $((isub + 1)) ] && return 0
+        elif [ "$pos" -le 2 ]; then
+          return 0
+        fi ;;
+      -*) ;;
+      *)
+        pos=$((pos + 1))
+        if [ "$pos" = 1 ]; then
+          isub=$i
+          case "$a" in run|local|ssh|shell|connect|dev|develop|code) hijo=1 ;; esac
+        fi ;;
+    esac
   done
   for a in ${rw_args[@]+"${rw_args[@]}"}; do
+    [ "$a" = -- ] && break
     case "$a" in -*) continue ;; esac
     if [ -z "$sub" ]; then sub=$a; else sub2=$a; break; fi
   done
   case "$sub" in
     ""|help|status|whoami|logs|list|ls|metrics|docs) return 0 ;;
-    environment|env)
-      case "$sub2" in new|create|add|delete|rm|remove|edit|update) return 1 ;; *) return 0 ;; esac ;;
+    environment|env) case "$sub2" in link|list|ls|config|show|info) return 0 ;; esac ;;
     service) case "$sub2" in list|ls|status|logs) return 0 ;; esac ;;
     domain) case "$sub2" in list|ls|status) return 0 ;; esac ;;
     deployment|deployments|project|projects|volume|volumes) case "$sub2" in list|ls) return 0 ;; esac ;;
@@ -328,7 +356,7 @@ railway_lectura() {
 while IFS= read -r seg; do
   railway_args "$seg" || continue
   railway_lectura ||
-    bloqueo Railway "el agente solo corre lecturas de railway (status, logs, list, environment <nombre>, variables con solo nombres, config plan, --help). Este comando escribe o no está en la lista: lo corre Leonardo en su terminal."
+    bloqueo Railway "el agente solo corre lecturas de railway (status, logs, list, environment link <nombre>, variables con solo nombres, config plan, --help). Este comando escribe o no está en la lista: lo corre Leonardo en su terminal."
   # Variables: solo nombres, nunca valores (salvo la ayuda).
   primer="" ayuda=0
   for a in ${rw_args[@]+"${rw_args[@]}"}; do

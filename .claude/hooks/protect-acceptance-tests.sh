@@ -13,7 +13,7 @@ path=${path//\\//}
 # Ahí toda ruta contiene /.claude/: se mide desde la raíz del worktree. Una ruta con .. no se
 # reinterpreta (queda con /.claude/ y se bloquea abajo).
 case "$path" in
-  */.claude/worktrees/*/..*|*/.claude/worktrees/*/*/..*) ;;
+  */.claude/worktrees/*/..*) ;;
   */.claude/worktrees/?*/?*) path=${path#*/.claude/worktrees/}; path=${path#*/} ;;
 esac
 case "$path" in

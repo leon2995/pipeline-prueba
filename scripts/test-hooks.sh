@@ -474,7 +474,7 @@ g permite 'git log -S credential-manager --oneline'
 echo "== guard-commands.sh: Railway, solo lecturas (T3a)"
 for c in 'railway --help' 'railway -V' 'railway --version' 'railway help up' 'railway up --help' \
   'railway status' 'railway status --json' 'railway whoami' 'railway logs' 'railway logs | tail -n 200' \
-  'railway list' 'railway ls' 'railway metrics' 'railway docs' 'railway environment staging' \
+  'railway list' 'railway ls' 'railway metrics' 'railway docs' 'railway environment link staging' \
   'railway environment list' 'railway env ls' 'railway environment config' 'railway environment link production' \
   'railway service list' 'railway service status' 'railway service logs' 'railway domain list' \
   'railway domain status x.up.railway.app' 'railway deployment list' 'railway project list' 'railway volume list' \
@@ -483,7 +483,9 @@ for c in 'railway --help' 'railway -V' 'railway --version' 'railway help up' 'ra
   'railway api describe Service' 'railway config plan' 'railway config plan --detailed-exit-code' \
   'railway config migrate' 'railway.exe status' '/usr/local/bin/railway status' 'npx @railway/cli status' \
   'npx -y @railway/cli logs' 'NO_COLOR=1 railway status' '(railway status)' 'grep -rn railway SETUP.md' \
-  'cat .railway/railway.ts' 'echo railway up' 'ls .railway'; do
+  'cat .railway/railway.ts' 'echo railway up' 'ls .railway' \
+  'if railway status; then echo ok; fi' 'for i in 1 2; do railway logs; done' 'timeout 30 railway status' \
+  'railway ssh --help' 'railway run --help' 'railway variable set --help'; do
   g permite "$c"
 done
 for c in 'railway up' 'railway up --detach' 'railway redeploy' 'railway restart' 'railway down' 'railway deploy -t x' \
@@ -497,7 +499,12 @@ for c in 'railway up' 'railway up --detach' 'railway redeploy' 'railway restart'
   'railway config migrate --delete-files' 'railway usage limit set 50' "railway api 'mutation { x }'" \
   "railway api 'query { me { id } }'" 'railway mcp' 'railway setup agent -y' 'railway upgrade --yes' \
   'railway.exe up' '/usr/local/bin/railway up' 'npx @railway/cli up' 'npx -y @railway/cli redeploy' \
-  'NO_COLOR=1 railway up' '(railway up)' 'git status && railway up' 'railway status; railway down'; do
+  'NO_COLOR=1 railway up' '(railway up)' 'git status && railway up' 'railway status; railway down' \
+  'railway environment staging' 'railway env production' \
+  'for i in 1 2 3; do railway up --detach && break; sleep 10; done' 'if ! railway up; then echo fallo; fi' \
+  'then railway redeploy' '{ railway down; }' 'while true; do railway restart; done' 'timeout 600 railway up' \
+  'xargs -n 1 railway up' 'nice -n 10 railway up' 'time railway up' 'watch -n 5 railway redeploy' \
+  'railway ssh -- df -h' 'railway ssh free -h' 'railway run -- node x.js --help' 'railway run pytest -V'; do
   g bloquea "$c" 'Railway'
 done
 g bloquea 'railway variables --kv' 'solo nombres'
@@ -513,8 +520,14 @@ g bloquea 'ls /c/Users/dev/.railway' 'credenciales'
 g bloquea 'grep token .railway/config.json' 'credenciales'
 g bloquea 'echo $RAILWAY_TOKEN' 'credenciales'
 g bloquea 'RAILWAY_API_TOKEN=x railway status' 'credenciales'
+g bloquea 'cat "C:\Users\dev\.railway\config.json"' 'credenciales'
+g bloquea 'ls /home/dev/.railway' 'credenciales'
+g bloquea 'dir %USERPROFILE%\.railway' 'credenciales'
+g bloquea 'ls $USERPROFILE/.railway' 'credenciales'
 g permite 'cat .railway/railway.ts'
 g permite 'ls C:/Users/dev/proyectos/app/.railway'
+g permite 'cat $USERPROFILE/proyectos/app/.railway/railway.ts'
+g permite 'echo $USERPROFILE'
 
 echo "== guard-commands.sh: identidad del bot $bot (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.

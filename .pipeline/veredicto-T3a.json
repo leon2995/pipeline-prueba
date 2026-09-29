@@ -1,0 +1,45 @@
+{
+  "task": "T3a",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "railway_args solo detecta railway cuando es la primera palabra del segmento después de '(', VAR=, sudo, env, command, exec, time o nohup. Cualquier otra primera palabra cae en '*) return 1'. Con palabras clave de shell o con envoltorios comunes, una escritura pasa sin bloqueo. Inputs exactos que el hook de la rama deja pasar y el de staging bloqueaba con el deny_pattern 'railway up' (grep sobre el comando entero): `for i in 1 2 3; do railway up --detach && break; sleep 10; done` (el segmento es 'do railway up --detach'); `if ! railway up; then echo fallo; fi` (el segmento es 'if ! railway up'); `timeout 600 railway up`; `then railway redeploy`; `{ railway down; }`. Un bucle de reintento o un if alrededor de un deploy es un hábito normal del agente, no ofuscación, así que cae dentro del modelo de amenaza declarado. Rompe C3, que dice que los patrones viejos salen porque 'quedan cubiertos por la lista' y no lo están, y rompe C6 (sin regresiones frente a staging). Las reglas deny de settings.json (Bash(railway up*) y similares) no cubren restart, deploy, ssh ni domain, y no está demostrado que Claude Code las aplique dentro del cuerpo de un for o de un if. La suite no tiene ningún caso con palabra clave o envoltorio antes de railway, por eso pasa.",
+      "fix": "En railway_args, en la primera posición, saltar las palabras clave de shell (if, then, else, elif, do, while, until, '!', '{') y los envoltorios comunes (timeout con su duración, xargs, watch, nice, stdbuf, winpty), igual que ya se hace con sudo o env. Agregar a la suite casos que se bloquean: 'for i in 1 2; do railway up; done', 'if ! railway up; then x; fi', 'timeout 60 railway up', 'xargs railway up', '{ railway down; }'. Agregar también casos que pasan: 'if railway status; then x; fi' y 'for i in 1 2; do railway logs; done'."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "railway_lectura devuelve 0 si --help, -h, --version o -V aparece en cualquier posición de rw_args, incluso después de '--' o dentro del comando que railway ejecuta. En `railway ssh -- df -h`, `railway ssh free -h` o `railway run -- pytest -V`, el -h o el -V es del comando hijo (run y ssh usan argumentos finales), no de railway. El hook deja pasar run y ssh, que C3 exige bloquear. Así se abre un shell en producción o se corre un proceso local con los secretos de producción inyectados. `railway ssh df -h` para ver el disco del contenedor es un diagnóstico que el agente haría por costumbre.",
+      "fix": "Tomar como ayuda o versión solo lo que aparece antes del primer argumento posicional después del subcomando, y nunca después de '--'. Otra opción más simple es excluir run, ssh, shell y connect de la regla de ayuda en cualquier posición, salvo 'railway run --help' con el flag justo después. Agregar casos que se bloquean: 'railway ssh -- df -h', 'railway ssh free -h' y 'railway run -- node x.js --help'."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "El bloqueo de la sesión de Railway (línea 72) solo reconoce separadores '/' en '/Users/<u>/.railway' y en '.railway/config.json'. En Windows, que es la plataforma principal de este repo, una ruta con barras invertidas copiada de un mensaje de error pasa y muestra el token de Leonardo: `cat \"C:\\Users\\lalvarez.e\\.railway\\config.json\"`. Git Bash la resuelve. El deny Read(~/.railway/**) solo cubre la herramienta Read, no Bash. protect-acceptance-tests.sh sí normaliza las barras invertidas, y este bloqueo no.",
+      "fix": "Antes de aplicar el grep de la sesión de Railway, normalizar las barras invertidas del comando en una copia (${cmd//\\\\//}), o usar [/\\\\] en el patrón de /Users/ y de .railway/config.json. Agregar un caso con 'C:\\Users\\dev\\.railway\\config.json' que se bloquea."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "environment y env usan una lista de prohibidos para sub2 (new, create, add, delete, rm, remove, edit, update), porque 'environment <nombre>' debe aceptar cualquier nombre. Si la CLI suma un subcomando de escritura (por ejemplo duplicate o apply), pasa, en contra del principio de lista de permitidos que declara el propio comentario. El criterio acepta este diseño. Lo dejo anotado.",
+      "fix": "Aceptar como nombre solo lo que cumple ^[A-Za-z0-9._-]+$ y no está en un conjunto conocido de subcomandos, o permitir link, list, ls y config de forma explícita y exigir 'environment link <nombre>' en /verificar-deploy."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "El patrón 'USERPROFILE[^ ;&|]*[/\\\\]\\.railway' es codicioso y bloquea de más el .railway/ de un repo nombrado desde el perfil del usuario: `cat $USERPROFILE/proyectos/app/.railway/railway.ts` se bloquea por credenciales. Con ~ y $HOME el patrón exige que .railway vaya justo después, y con USERPROFILE no. Tampoco se cubre `ls /home/<u>/.railway` en Linux, que no muestra el token porque config.json sí se detecta. Es menor.",
+      "fix": "Usar 'USERPROFILE%?\\}?[/\\\\]\\.railway' (.railway justo después de la variable) y agregar '/home/[^/ ]+/\\.railway' junto a '/Users/'."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/protect-acceptance-tests.sh",
+      "detail": "La segunda alternativa '*/.claude/worktrees/*/*/..*' está cubierta por la primera y sobra. La primera también bloquea de más archivos cuyo nombre empieza con '..' (src/..cache), lo que cumple fail-closed. Fuera del modelo de amenaza: una ruta del checkout principal como 'C:/repo/tests/acceptance/.claude/worktrees/x/y.py' se reinterpreta como 'y.py' y pasa. Git la ignora por el patrón '.claude/worktrees/' sin ancla, así que no llega al repo.",
+      "fix": "Dejar una sola alternativa, '*/.claude/worktrees/*/..*'. Si se quiere cerrar lo demás, quitar solo el prefijo del repo del proyecto ($CLAUDE_PROJECT_DIR/.claude/worktrees/<n>/) en lugar de la primera aparición de /.claude/worktrees/."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Una lista de permitidos que detecta el comando por la primera palabra del segmento tiene que saltar las palabras clave de shell (if, then, do, !, {) y los envoltorios comunes (timeout, xargs). Si no, retira sin avisar la cobertura que daba el grep textual al que reemplaza."
+}
