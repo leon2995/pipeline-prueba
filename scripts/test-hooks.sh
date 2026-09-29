@@ -821,6 +821,9 @@ chequeo pasa 'CLAUDE.md: el proceso ligero exige code owners activo en staging y
 chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$au"
 chequeo pasa 'auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$ac"
 chequeo pasa 'auditor.md: el new_lesson va a lecciones pendientes' tiene_texto '.pipeline/lecciones-pendientes.md' "$au"
+# Repos instalados (instalable): el hook Stop del engineer tiene tiempo para npm test en Windows.
+stop_timeout() { awk '/run-tests\.sh/ { f = 1; next } f && /timeout:/ { print; exit }' "$repo/.claude/agents/engineer.md" | tr -d '\r' | grep -Eq 'timeout: *600$'; }
+chequeo pasa 'engineer.md: el hook Stop declara timeout: 600' stop_timeout
 # Flujo del engineer en worktrees (T3a).
 chequeo pasa 'engineer.md: en su worktree hace git switch a la rama de la subtarea' tiene_texto 'git switch <rama>' "$repo/.claude/agents/engineer.md"
 chequeo pasa 'CLAUDE.md: el CTO no deja activa la rama de la subtarea en su checkout' tiene_texto 'no la dejes activa en tu checkout' "$cl"
