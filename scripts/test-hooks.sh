@@ -377,6 +377,30 @@ g bloquea 'gh auth status --show-token' 'credenciales'
 g bloquea 'gh auth git-credential get' 'credenciales'
 g bloquea 'git credential fill < /dev/null' 'credenciales'
 g bloquea 'git credential approve' 'credenciales'
+g bloquea 'git credential reject' 'credenciales'
+g bloquea 'printf x | git credential fill' 'credenciales'
+g bloquea 'git -C . credential fill' 'credenciales'
+# git credential-manager (lecciones, T2): el agente no toca el Credential Manager de Leonardo; solo
+# puede listar las cuentas.
+g bloquea 'git credential-manager github logout leon2995' 'credenciales'
+g bloquea 'git credential-manager github login --username leon2995 --device' 'credenciales'
+g bloquea 'git credential-manager get' 'credenciales'
+g bloquea 'git credential-manager store' 'credenciales'
+g bloquea 'git credential-manager erase' 'credenciales'
+g bloquea 'git credential-manager configure' 'credenciales'
+g bloquea 'git credential-manager' 'credenciales'
+g bloquea 'git-credential-manager github logout x' 'credenciales'
+g bloquea 'git-credential-manager.exe github logout x' 'credenciales'
+g bloquea 'git -C . credential-manager github logout x' 'credenciales'
+g bloquea 'git credential-manager github list; git credential-manager github logout x' 'credenciales'
+# Después de la ronda del auditor: && entre invocaciones, un comentario que cuela github list, -core,
+# ruta completa y -c antes del subcomando.
+g bloquea 'git credential-manager github list && git credential-manager github logout x' 'credenciales'
+g bloquea 'git credential-manager github logout x # git credential-manager github list' 'credenciales'
+g bloquea 'git credential-manager-core erase' 'credenciales'
+g bloquea 'git-credential-manager-core github logout x' 'credenciales'
+g bloquea '/mingw64/bin/git-credential-manager.exe github logout x' 'credenciales'
+g bloquea 'git -c core.x=y credential-manager erase' 'credenciales'
 g bloquea 'env' 'credenciales'
 g bloquea 'ls && env' 'credenciales'
 g bloquea 'env | sort' 'credenciales'
@@ -434,6 +458,11 @@ g permite 'printenv PATH'
 g permite 'printenv -0 PATH'
 g permite 'env LC_ALL=C sed -i s/a/b/ f'
 g permite 'env LANG=C sort -'
+g permite 'git credential-manager github list'
+g permite 'git credential-manager github list --url https://github.com'
+g permite 'git credential-manager github list 2>&1 | head -3'
+g permite 'git grep -n credential-manager SETUP.md'
+g permite 'git log -S credential-manager --oneline'
 
 echo "== guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
@@ -691,6 +720,27 @@ chequeo pasa 'el job hooks corre la suite con mawk' en_bloque job_hooks 'PATH="/
 chequeo pasa 'el job hooks instala mawk si falta (no lo omite)' en_bloque job_hooks 'apt-get install -y[a-z -]* mawk'
 chequeo pasa 'CI corre en pull_request' en_bloque disparadores '^  pull_request:'
 chequeo pasa 'CI corre en push a feat/** y fix/** (bajo push:)' en_bloque disparador_push "^    branches: \[.*'feat/\*\*'.*'fix/\*\*'.*\]"
+
+echo "== protocolo: lecciones, proceso ligero y auditores (lecciones, T2)"
+tiene_texto() { tr -d '\r' < "$2" | grep -qF -- "$1"; }
+cl="$repo/CLAUDE.md"
+au="$repo/.claude/agents/auditor.md"
+ac="$repo/.claude/prompts/auditor-codex.md"
+chequeo pasa 'existe .pipeline/lecciones-pendientes.md' test -f "$repo/.pipeline/lecciones-pendientes.md"
+chequeo falla '.pipeline/ no es ruta de gobierno' grep -Eq '^(\*\*/)?\.pipeline' "$repo/.claude/rutas-gobierno.txt"
+chequeo pasa 'CLAUDE.md: el new_lesson va a lecciones pendientes' tiene_texto 'agrégala a `.pipeline/lecciones-pendientes.md`' "$cl"
+chequeo pasa 'CLAUDE.md: un PR de lecciones al cierre del proyecto o con 5 pendientes' tiene_texto 'cuando haya 5 lecciones pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (Fase 3, paso 3)' tiene_texto 'solo `LESSONS.md`, nunca las pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (tabla de roles)' tiene_texto 'LESSONS.md (nunca las lecciones pendientes)' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (Memoria del sistema)' tiene_texto 'el engineer nunca recibe las pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el new_lesson de Codex también va a pendientes' tiene_texto 'Si Codex trae `new_lesson`, también va a `.pipeline/lecciones-pendientes.md`' "$cl"
+chequeo pasa 'CLAUDE.md: el router dice que el proceso ligero no ejecuta JEV' tiene_texto 'En el proceso ligero no se ejecuta JEV' "$cl"
+chequeo pasa 'SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager' tiene_texto 'y `git credential-manager`, salvo `github list`' "$repo/SETUP.md"
+chequeo pasa 'CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno' tiene_texto 'una ronda del auditor Claude y la aprobación de Leonardo como code owner' "$cl"
+chequeo pasa 'CLAUDE.md: el proceso ligero exige code owners activo en staging y main' tiene_texto 'protección con code owners esté activa en `staging` y `main`' "$cl"
+chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$au"
+chequeo pasa 'auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$ac"
+chequeo pasa 'auditor.md: el new_lesson va a lecciones pendientes' tiene_texto '.pipeline/lecciones-pendientes.md' "$au"
 
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }

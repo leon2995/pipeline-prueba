@@ -1,0 +1,51 @@
+{
+  "task": "lecciones",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "CLAUDE.md",
+      "detail": "La excepción del proceso ligero solo quedó en 'Cambios en rutas de gobierno' (líneas 20-37) y en el paso 6 de la Fase 3 (línea 84). Hay otros lugares que siguen imponiendo lo que la regla quita y no la mencionan. (1) Fase 0, línea 47: medio lleva '/audit-codex obligatorio'. (2) Fase 0, línea 48: alto lleva 'doble auditor (Claude y Codex)'. Un PR de gobierno que toca auth, como el hook de identidad o credenciales, es riesgo alto según la línea 48, pero el proceso ligero no distingue nivel de riesgo. El texto no dice cuál de las dos reglas manda. (3) Paso 7, Router (líneas 85-89): sigue sin excepción, 'Ejecuta jev.py ... y obedece', y el PR solo se abre con PASS. En cambio, el proceso ligero dice 'sin JEV' y que 'los hallazgos se corrigen o se documentan en el PR', lo que supone abrir el PR aunque el veredicto sea fail. (4) El paso 1 (auditoría del plan, riesgo medio y alto) choca con 'una ronda del auditor Claude': no queda claro si el proceso ligero también se salta la auditoría del plan. Así, el protocolo queda con dos reglas que se contradicen justo en las compuertas.",
+      "fix": "Agregar la referencia en las compuertas afectadas. En Fase 0, para medio y alto: 'salvo proceso ligero de gobierno (ver arriba)', y decidir de forma explícita si el riesgo alto de gobierno también va con proceso ligero. En el paso 7: 'no aplica en el proceso ligero; el PR se abre tras la ronda única con el veredicto en el cuerpo'. Aclarar si el paso 1 se mantiene o no en el proceso ligero."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Falso positivo por diseño del patrón. En gcm, `git( +[^ ;&|]+)* +credential-manager` acepta cualquier token entre git y credential-manager, no solo opciones globales. Por eso se bloquean comandos de lectura en los que credential-manager es un argumento posicional: `git grep credential-manager`, `git grep -n credential-manager SETUP.md`, `git log -S credential-manager` y `git branch credential-manager`. En este repo, que documenta GCM, el agente podría usarlos de forma habitual. El límite documentado en el encabezado solo menciona --title y -m. El impacto es bajo: el mensaje del hook orienta al agente y existe la herramienta Grep.",
+      "fix": "Restringir los tokens intermedios a opciones globales de git (por ejemplo `( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)*`, como hace $F, más -C y -c con su valor), o documentar el límite `git grep/log -S` en el encabezado y en el mensaje del bloqueo."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "La verificación de la excepción `github list` no está anclada a la invocación: el regex `credential-manager(\\.exe)? +github +list( [^;&|]*)?$` se busca en cualquier parte del segmento. Por eso pasa un segmento como `git credential-manager github logout talos-bot-leon # luego git credential-manager github list`, donde el comentario cuela el patrón permitido en el mismo segmento y el logout se ejecuta. Lo mismo ocurre con `git credential-manager github list $(git credential-manager github logout x)`: el $() no parte el segmento. El segundo caso queda fuera del modelo de amenaza (ofuscación). El primero, un comentario en el mismo segmento, es un error poco común.",
+      "fix": "Quitar los comentarios (`#` precedido de espacio) del segmento antes de evaluarlo, y exigir que el primer match de gcm en el segmento vaya seguido directamente de `github list`. Agregar un caso a la suite con el comentario."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Fuera del modelo de amenaza o variantes poco comunes. `git credential-manager-core erase` y `git-credential-manager-core github logout x` pasan, porque `([^[:alnum:]_.-]|$)` rechaza el sufijo -core. Es el nombre antiguo de GCM Core, frecuente en documentación vieja, que el agente podría usar por costumbre si el shim existe en la instalación. También pasan las rutas completas (`/c/Program Files/Git/mingw64/bin/git-credential-manager.exe github logout x`), porque `/` no está en I, y `powershell.exe -Command \"git credential-manager ...\"`.",
+      "fix": "Aceptar `-core` como sufijo opcional en gcm (`credential-manager(-core)?(\\.exe)?`) y permitir `/` o `\\\\` antes de `git-credential-manager` en la alternativa de ruta. Agregar casos a la suite."
+    },
+    {
+      "severity": "baja",
+      "file": "CLAUDE.md",
+      "detail": "La verificación de protección que hace el bot es un proxy más débil que lo que afirma. GitHub pide revisión al code owner (requested_reviewers) por el solo hecho de existir CODEOWNERS, esté o no activo require_code_owner_reviews. Y `mergeable_state: blocked` también sale con '1 aprobación requerida' sin code owners. Los dos chequeos de talos-bot-leon (líneas 29-31) pasan aunque Leonardo desactive require_code_owner_reviews y deje solo aprobaciones requeridas. La única compensación es que Leonardo 'vuelve a hacerlo si cambia la protección'. Hoy el efecto práctico es nulo, porque el bot no puede aprobar su propio PR y no hay otros colaboradores. Además, mergeable_state se calcula de forma perezosa y puede dar `unknown` al abrir el PR.",
+      "fix": "Declarar en CLAUDE.md que los chequeos del bot solo prueban 'hay protección y el PR no se puede mergear sin revisión', no code owners en sí, y que la garantía de code owners depende del GET de Leonardo. Tratar `unknown` como 'reintentar', no como activo."
+    },
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh",
+      "detail": "Los chequeos de texto no pasan trivialmente: la mutación contra staging dio 9 fallos. Pero C2 exige 'nunca las pendientes' en tres lugares (tabla de roles, paso 3 y Memoria del sistema), y `tiene_texto 'nunca las pendientes'` solo coincide con el paso 3 (línea 81). La tabla dice 'nunca las lecciones pendientes' y Memoria dice 'nunca recibe las pendientes', y ninguna de las dos contiene la cadena. Si se borran esos dos textos, el chequeo sigue en verde. Tampoco hay chequeo de C6 en SETUP.md ni del encabezado del hook. Faltan casos de gcm con `&&` y con `2>&1`/`| head` sobre `github list`, aunque el código los maneja.",
+      "fix": "Agregar chequeos para la tabla ('LESSONS.md (nunca las lecciones pendientes)') y para Memoria ('el engineer nunca recibe las pendientes'), uno para SETUP.md ('y `git credential-manager`, salvo `github list`') y los casos `github list 2>&1` (permite) y `github list && git credential-manager github logout x` (bloquea)."
+    },
+    {
+      "severity": "baja",
+      "file": ".pipeline/lecciones-pendientes.md",
+      "detail": "C1 se cumple. Revisé las 15 contra el new_lesson de cada veredicto: 4 del #4, 8 del #6 (los veredictos con dos lecciones unidas por ' | ' se partieron bien) y 3 de #10 y #11. El cuerpo es textual y se excluyen hook-force-push y audit-codex-stdin. Única diferencia: la lección de `veredicto-codex-hooks-windows-y-gobierno-intento1.json` no traía prefijo en el original, y en pendientes se le antepuso '[2026-09-28] [hooks-windows-y-gobierno]'. Es normalización de formato, no texto del auditor. Aparte, el paso 5 de CLAUDE.md pide anotar 'el PR' al agregar la lección, pero el PR se abre en el paso 7, así que el número aún no existe. Y el encabezado de pendientes habla de lecciones 'de los auditores (Claude y Codex)', mientras que CLAUDE.md solo define el destino del new_lesson del auditor Claude (paso 5), no el de Codex (paso 6).",
+      "fix": "Indicar en el encabezado que el prefijo [fecha] [subtarea] lo agrega el CTO cuando el original no lo trae. En el paso 5, anotar el PR al abrirlo. En el paso 6, decir que el new_lesson de Codex también va a pendientes."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [lecciones] protocolo con excepciones: al agregar una excepción a un paso (sin Codex, sin JEV), actualizar todas las compuertas que imponen ese paso (niveles de riesgo en Fase 0, router, auditoría del plan) y no solo el párrafo nuevo y el paso más cercano; si no, quedan dos reglas contradictorias sin precedencia."
+}
