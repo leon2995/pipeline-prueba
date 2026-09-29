@@ -124,7 +124,7 @@ ssh -T git@github.com                                     # informativo: si dice
 
 La primera pregunta importa. Si respondes Sí, `gh` le entrega el token de `talos-bot-leon` al helper que ya tienes (el Git Credential Manager): borra tu credencial de github.com, guarda la de `talos-bot-leon` en el Credential Manager de Windows, y tus `git push` desde la terminal pasan a salir como `talos-bot-leon` sin aviso. Al agente no le hace falta, porque su helper sale de la plantilla del paso f.
 
-**Si respondiste Sí.** Lo corres tú en tu terminal, no el agente: estos comandos tocan tu Credential Manager. El hook le bloquea al agente `git credential fill` y `git config ... credential`, pero no `git credential-manager`.
+**Si respondiste Sí.** Lo corres tú en tu terminal, no el agente: estos comandos tocan tu Credential Manager. El hook le bloquea al agente `git credential fill|approve|reject`, `git config ... credential` y `git credential-manager`, salvo `github list`.
 1. `git credential-manager github logout talos-bot-leon`
 2. `git credential-manager github login --username leon2995 --device`. Antes de autorizar el código, confirma en el navegador que la sesión abierta sea `leon2995` y no `talos-bot-leon`: si el navegador tiene abierta la sesión del bot, el token guardado sería del bot aunque la etiqueta diga `leon2995`.
 3. Verifica:

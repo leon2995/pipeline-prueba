@@ -33,7 +33,8 @@ cmd=$(printf '%s' "$input" | json_get command)
 # Credenciales e identidad del agente (cuenta-agente). Modelo de amenaza: errores del agente. El
 # agente trabaja como talos-bot-leon con GH_CONFIG_DIR apuntando a ~/.talos-gh (fuera del repo), donde
 # vive su token; la configuración sale de .claude/settings.local.json. Se bloquea lo que un agente
-# haría por costumbre y expondría una credencial, cambiaría de cuenta o aprobaría un PR.
+# haría por costumbre y expondría una credencial, cambiaría de cuenta, tocaría el Credential Manager
+# de Leonardo (git credential-manager, salvo github list) o aprobaría un PR.
 # Límites conocidos de esta sección y de la identidad de talos-bot-leon (C3 y C4 de cuenta-agente), que
 # no se persiguen porque son sintaxis de shell y no errores comunes; el servidor (CODEOWNERS,
 # protección de ramas, el autor no aprueba su PR) es el control efectivo:
@@ -67,6 +68,19 @@ if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|git
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[:alnum:]_-]|\$)|${I}gh$F +auth$F +status[^;&|]*( -[a-z]*t[a-z]*( |\$)| --show-token)|${I}git( +[^ ;&|]+)* +credential +(fill|approve|reject)"; then
   bloqueo credenciales "el comando imprime una credencial (gh auth token, gh auth status -t, gh auth git-credential, git credential fill)."
+fi
+# git credential-manager (lecciones, T2): login, logout, get, store, erase o configure tocan el
+# Credential Manager de Leonardo, donde vive su credencial de git. El agente solo puede listar las
+# cuentas (git credential-manager github list). También git-credential-manager y .exe, y con opciones
+# globales de git antes. Límite: el texto "git credential-manager" dentro de un --title o un -m
+# también cuenta; usa --body-file y -F.
+gcm="${I}(git( +[^ ;&|]+)* +credential-manager|git-credential-manager)(\\.exe)?([^[:alnum:]_.-]|\$)"
+if printf '%s\n' "$cmd" | grep -Eq "$gcm"; then
+  while IFS= read -r seg; do
+    printf '%s\n' " $seg " | grep -Eq "$gcm" || continue
+    printf '%s\n' " $seg " | grep -Eq "credential-manager(\\.exe)? +github +list( [^;&|]*)?\$" ||
+      bloqueo credenciales "git credential-manager toca el Credential Manager de Leonardo; el agente solo puede correr git credential-manager github list."
+  done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
 fi
 # env_imprime <segmento>: el segmento imprime variables de entorno: set, export, declare o typeset
 # sin argumentos; printenv sin una variable (solo opciones); o env sin un comando que correr (solo
