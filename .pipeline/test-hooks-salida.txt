@@ -221,6 +221,20 @@ ok     bloquea  gh auth status --show-token
 ok     bloquea  gh auth git-credential get
 ok     bloquea  git credential fill < /dev/null
 ok     bloquea  git credential approve
+ok     bloquea  git credential reject
+ok     bloquea  printf x | git credential fill
+ok     bloquea  git -C . credential fill
+ok     bloquea  git credential-manager github logout leon2995
+ok     bloquea  git credential-manager github login --username leon2995 --device
+ok     bloquea  git credential-manager get
+ok     bloquea  git credential-manager store
+ok     bloquea  git credential-manager erase
+ok     bloquea  git credential-manager configure
+ok     bloquea  git credential-manager
+ok     bloquea  git-credential-manager github logout x
+ok     bloquea  git-credential-manager.exe github logout x
+ok     bloquea  git -C . credential-manager github logout x
+ok     bloquea  git credential-manager github list; git credential-manager github logout x
 ok     bloquea  env
 ok     bloquea  ls && env
 ok     bloquea  env | sort
@@ -275,6 +289,8 @@ ok     permite  printenv PATH
 ok     permite  printenv -0 PATH
 ok     permite  env LC_ALL=C sed -i s/a/b/ f
 ok     permite  env LANG=C sort -
+ok     permite  git credential-manager github list
+ok     permite  git credential-manager github list --url https://github.com
 == guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso
 -- identidad
 -- sin la identidad de talos-bot-leon
@@ -420,6 +436,17 @@ ok     pasa     el job hooks corre la suite con mawk
 ok     pasa     el job hooks instala mawk si falta (no lo omite)
 ok     pasa     CI corre en pull_request
 ok     pasa     CI corre en push a feat/** y fix/** (bajo push:)
+== protocolo: lecciones, proceso ligero y auditores (lecciones, T2)
+ok     pasa     existe .pipeline/lecciones-pendientes.md
+ok     falla    .pipeline/ no es ruta de gobierno
+ok     pasa     CLAUDE.md: el new_lesson va a lecciones pendientes
+ok     pasa     CLAUDE.md: un PR de lecciones al cierre del proyecto o con 5 pendientes
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes
+ok     pasa     CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno
+ok     pasa     CLAUDE.md: el proceso ligero exige code owners activo en staging y main
+ok     pasa     auditor.md: evasiones fuera del modelo de amenaza con severidad baja
+ok     pasa     auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja
+ok     pasa     auditor.md: el new_lesson va a lecciones pendientes
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -471,4 +498,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-429 ok, 0 fallos
+455 ok, 0 fallos
