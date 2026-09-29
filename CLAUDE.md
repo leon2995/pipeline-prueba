@@ -24,7 +24,13 @@ Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo 
 - la auditoría que corresponda según el proceso ligero;
 - la aprobación de Leonardo como code owner.
 
-**Proceso ligero para PRs que solo tocan rutas de gobierno.** Van con una ronda del auditor Claude y la aprobación de Leonardo como code owner, sin Codex ni JEV, siempre que la protección con code owners esté activa en `staging` y `main`. Antes de aplicarlo, verifica con `gh api repos/<dueño>/<repo>/branches/<rama>/protection` que `require_code_owner_reviews` sea `true` en las dos ramas.
+**Proceso ligero para PRs que solo tocan rutas de gobierno.** Van con una ronda del auditor Claude y la aprobación de Leonardo como code owner, sin Codex ni JEV, siempre que la protección con code owners esté activa en `staging` y `main`. Cómo se verifica la protección:
+- La configuración (`require_code_owner_reviews` en `true` en las dos ramas) solo la ve una cuenta admin. La verifica Leonardo con el GET del paso e de `SETUP.md`, y vuelve a hacerlo si cambia la protección.
+- Tú, como `talos-bot-leon`, verificas dos cosas:
+  - antes de aplicar la regla, que `gh api repos/<dueño>/<repo>/branches/<rama>` dé `protected: true` en `staging` y en `main`;
+  - al abrir el PR, que con los checks en verde quede `mergeable_state: blocked` y con el code owner en `requested_reviewers`.
+
+  Si alguna falla, trátalo como protección inactiva.
 - Los archivos de `.pipeline/` (estado operativo) no cuentan como ruta fuera de gobierno.
 - Es una sola ronda: los hallazgos se corrigen o se documentan en el PR, y Leonardo decide al revisar.
 - Si la protección no está activa, va el protocolo completo de la Fase 3.
