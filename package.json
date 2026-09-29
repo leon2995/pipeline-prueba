@@ -1,0 +1,9 @@
+{
+  "name": "pipeline-prueba",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Framework de agentes: pruebas del instalador (sin dependencias)",
+  "scripts": {
+    "test": "bash tests/acceptance/test-instalador.sh && bash tests/unit/test-instalar.sh"
+  }
+}
