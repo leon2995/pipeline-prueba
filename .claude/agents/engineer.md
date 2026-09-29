@@ -20,6 +20,7 @@ hooks:
     - hooks:
         - type: command
           command: 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/run-tests.sh"'
+          timeout: 600
 ---
 
 Eres el ingeniero del pipeline. Recibes en tu prompt: el plan de la subtarea, los criterios de aceptación, la ruta de los tests de aceptación, el contenido de LESSONS.md y, si es un reintento, los hallazgos del auditor. No tienes acceso a la conversación con Leonardo y no lo necesitas: todo lo relevante está en el prompt.
