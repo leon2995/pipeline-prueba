@@ -6,16 +6,10 @@ gh api -X PUT repos/{{dueno}}/{{repo}}/collaborators/{{bot}} -f permission=push
 id=$(GH_CONFIG_DIR="$HOME/.talos-gh" gh api user/repository_invitations --jq '.[] | select((.repository.full_name | ascii_downcase) == "{{repo_completo_min}}") | .id'); echo "invitación: $id"
 GH_CONFIG_DIR="$HOME/.talos-gh" gh api -X PATCH user/repository_invitations/$id
 # 2c. Protección de main y staging. Aplícala después de que el CI corrió una vez en las dos ramas, para que existan los checks secrets y hooks.
-#     Si el repo también corre el job node o python, agrégalo a checks con el mismo app_id.
+#     Si el repo también corre el job node o python, agrégalo a contexts y a checks con el mismo app_id.
 gh api -X PUT repos/{{dueno}}/{{repo}}/branches/main/protection --input - <<'JSON'
 {
-  "required_status_checks": {
-    "strict": false,
-    "checks": [
-      {"context": "secrets", "app_id": 15368},
-      {"context": "hooks", "app_id": 15368}
-    ]
-  },
+  "required_status_checks": {"strict": false, "contexts": ["secrets", "hooks"]},
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "required_approving_review_count": 1,
@@ -27,15 +21,13 @@ gh api -X PUT repos/{{dueno}}/{{repo}}/branches/main/protection --input - <<'JSO
   "allow_deletions": false
 }
 JSON
+# El PATCH fija los checks secrets y hooks a la app de GitHub Actions (app_id 15368).
+gh api -X PATCH repos/{{dueno}}/{{repo}}/branches/main/protection/required_status_checks --input - <<'JSON'
+{"strict": false, "checks": [{"context": "secrets", "app_id": 15368}, {"context": "hooks", "app_id": 15368}]}
+JSON
 gh api -X PUT repos/{{dueno}}/{{repo}}/branches/staging/protection --input - <<'JSON'
 {
-  "required_status_checks": {
-    "strict": false,
-    "checks": [
-      {"context": "secrets", "app_id": 15368},
-      {"context": "hooks", "app_id": 15368}
-    ]
-  },
+  "required_status_checks": {"strict": false, "contexts": ["secrets", "hooks"]},
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "required_approving_review_count": 0,
@@ -46,6 +38,10 @@ gh api -X PUT repos/{{dueno}}/{{repo}}/branches/staging/protection --input - <<'
   "allow_force_pushes": false,
   "allow_deletions": false
 }
+JSON
+# El PATCH fija los checks secrets y hooks a la app de GitHub Actions (app_id 15368).
+gh api -X PATCH repos/{{dueno}}/{{repo}}/branches/staging/protection/required_status_checks --input - <<'JSON'
+{"strict": false, "checks": [{"context": "secrets", "app_id": 15368}, {"context": "hooks", "app_id": 15368}]}
 JSON
 # 2d. Verifica la protección de las dos ramas. Esperado: main con 1, true, true, true, false, false;
 #     staging con 0, true, false, true, false, false; en las dos, checks secrets:15368 y hooks:15368.
@@ -64,6 +60,9 @@ railway variable set PORT={{puerto}} --service {{servicio}} --environment stagin
 railway domain --port {{puerto}} --service {{servicio}} --environment staging
 # SDK que pide .railway/railway.ts, con Node 22 o más. Deja railway en devDependencies de package.json: commitéalo por PR.
 npm install --save-dev railway@3.11.0
+# Nota: ese comando crea package.json en la raíz si no existe. En un proyecto que no es de Node, desde ahí el job node
+#       del CI y el hook Stop del engineer (run-tests.sh, que prefiere package.json a pyproject.toml) corren npm test.
+#       Antes de instalarlo, decide dónde van las pruebas del proyecto.
 railway environment link production
 railway config plan
 railway config apply

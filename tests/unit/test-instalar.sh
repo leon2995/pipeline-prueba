@@ -576,6 +576,56 @@ e2e_nota_de_dueno() {
   return 0
 }
 
+# linea_de <texto>: número de la primera línea de SALIDA que contiene el texto (0 si no está).
+linea_de() {
+  local n=0 linea
+  while IFS= read -r linea; do
+    n=$((n + 1))
+    case "$linea" in
+      *"$1"*)
+        printf '%s' "$n"
+        return 0
+        ;;
+    esac
+  done <<< "$SALIDA"
+  printf '0'
+}
+
+e2e_proteccion_en_tres_pasos() {
+  local d rama put patch get checks
+  d=$(nuevo_repo proteccion)
+  commit_todo "$d"
+  correr "$instalador" "$d"
+  checks='{"strict": false, "checks": [{"context": "secrets", "app_id": 15368}, {"context": "hooks", "app_id": 15368}]}'
+  [ "$(printf '%s\n' "$SALIDA" | grep -cxF "$checks")" -eq 2 ] || { echo "el JSON de checks no sale en una línea por rama"; return 1; }
+  [ "$(printf '%s\n' "$SALIDA" | grep -cF '"required_status_checks": {"strict": false, "contexts": ["secrets", "hooks"]},')" -eq 2 ] \
+    || { echo "el PUT no usa contexts en las dos ramas"; return 1; }
+  [ "$(printf '%s\n' "$SALIDA" | grep -cF '"checks"')" -eq 2 ] || { echo "\"checks\" aparece fuera de los dos PATCH"; return 1; }
+  for rama in main staging; do
+    put=$(linea_de "gh api -X PUT repos/acme/demo/branches/$rama/protection --input -")
+    patch=$(linea_de "gh api -X PATCH repos/acme/demo/branches/$rama/protection/required_status_checks --input -")
+    get=$(linea_de "gh api repos/acme/demo/branches/$rama/protection --jq")
+    [ "$put" -gt 0 ] && [ "$patch" -gt "$put" ] && [ "$get" -gt "$patch" ] \
+      || { echo "$rama: el orden no es PUT ($put), PATCH ($patch), GET ($get)"; return 1; }
+  done
+  [ "$(linea_de "El PATCH fija los checks")" -lt "$(linea_de "gh api -X PATCH repos/acme/demo/branches/main")" ] \
+    || { echo "falta el comentario antes del PATCH"; return 1; }
+}
+
+e2e_nota_del_sdk() {
+  local d npm nota
+  d=$(nuevo_repo nota-sdk)
+  commit_todo "$d"
+  correr "$instalador" "$d"
+  npm=$(linea_de "npm install --save-dev railway@3.11.0")
+  nota=$(linea_de "crea package.json en la raíz")
+  [ "$npm" -gt 0 ] && [ "$nota" -eq $((npm + 1)) ] || { echo "la nota no sigue al npm install ($npm, $nota)"; return 1; }
+  contiene "$SALIDA" "run-tests.sh, que prefiere package.json a pyproject.toml" || { echo "la nota no nombra run-tests.sh"; return 1; }
+  contiene "$SALIDA" "decide dónde van las pruebas del proyecto" || { echo "la nota no pide decidir dónde van las pruebas"; return 1; }
+}
+
+caso "la protección va en PUT con contexts, PATCH con checks y app_id, y GET, por rama" e2e_proteccion_en_tres_pasos
+caso "después del npm install del SDK sale la nota sobre package.json y npm test" e2e_nota_del_sdk
 caso "una carpeta intermedia que es archivo da conflicto y no se toca" e2e_padre_es_archivo
 caso "el diff impreso de un archivo generado en conflicto corre y muestra las dos versiones" e2e_conflicto_generado
 caso "un archivo generado que solo cambia en CRLF cuenta como igual" e2e_generado_crlf_es_igual
