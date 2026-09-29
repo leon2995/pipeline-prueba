@@ -124,16 +124,16 @@ ssh -T git@github.com                                     # informativo: si dice
 
 La primera pregunta importa. Si respondes Sí, `gh` le entrega el token de `talos-bot-leon` al helper que ya tienes (el Git Credential Manager): borra tu credencial de github.com, guarda la de `talos-bot-leon` en el Credential Manager de Windows, y tus `git push` desde la terminal pasan a salir como `talos-bot-leon` sin aviso. Al agente no le hace falta, porque su helper sale de la plantilla del paso f.
 
-**Si respondiste Sí.** Lo corres tú en tu terminal, no el agente: el hook le bloquea estos comandos.
+**Si respondiste Sí.** Lo corres tú en tu terminal, no el agente: estos comandos tocan tu Credential Manager. El hook le bloquea al agente `git credential fill` y `git config ... credential`, pero no `git credential-manager`.
 1. `git credential-manager github logout talos-bot-leon`
 2. `git credential-manager github login --username leon2995 --device`. Antes de autorizar el código, confirma en el navegador que la sesión abierta sea `leon2995` y no `talos-bot-leon`: si el navegador tiene abierta la sesión del bot, el token guardado sería del bot aunque la etiqueta diga `leon2995`.
 3. Verifica:
    - `git credential-manager github list` muestra solo `leon2995`.
    - `git config --global --get-regexp '^credential'` sale igual que antes del login. Si no tenías helper, `gh` se configura como helper global y aquí aparecen las líneas nuevas: quítalas con `git config --global --unset-all <clave>`.
-   - Este comando consulta a GitHub con el token guardado, sin imprimirlo, y debe responder `leon2995`. Si responde `sin credencial guardada`, el paso 2 no guardó nada: repítelo. La etiqueta `username=` de `git credential fill` no alcanza, porque es la que pusiste con `--username`.
+   - Este comando consulta a GitHub con el token guardado, sin imprimirlo, y debe responder `leon2995`. Si responde `sin credencial guardada`, el paso 2 no guardó nada: repítelo. Si `gh` muestra un error HTTP (por ejemplo 401), hay credencial, pero el token guardado no es válido: también repite el paso 2. La etiqueta `username=` de `git credential fill` no alcanza, porque es la que pusiste con `--username`.
 
      ```bash
-     printf 'protocol=https\nhost=github.com\nusername=leon2995\n\n' | git credential fill | sed -n 's/^password=//p' | { read -r t && [ -n "$t" ] && GH_TOKEN="$t" gh api user --jq .login || echo 'sin credencial guardada'; }
+     printf 'protocol=https\nhost=github.com\nusername=leon2995\n\n' | git credential fill | sed -n 's/^password=//p' | { read -r t; if [ -n "$t" ]; then GH_TOKEN="$t" gh api user --jq .login; else echo 'sin credencial guardada'; fi; }
      ```
 
 Con `--insecure-storage` y la respuesta No, el token de `talos-bot-leon` queda en `~/.talos-gh/hosts.yml` y no en el keyring ni en el Credential Manager. Aun así, en `gh` 2.92.0 el login marca a `talos-bot-leon` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
