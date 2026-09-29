@@ -302,12 +302,23 @@ ubicar_fuente() {
   FUENTE=$(cd -- "$DIR_INSTALADOR/.." && pwd) || error_fuente "no pude ubicar la fuente del framework"
 }
 
+# git_destino <args>: git sobre el destino. main hace cd al destino una vez y git hereda ese
+# directorio. No se usa git -C: en Git Bash, una ruta POSIX con comillas simples no llega convertida
+# a git.exe, pero el directorio de trabajo sí.
+git_destino() {
+  if [ "$PWD" = "$DESTINO" ]; then
+    git "$@"
+  else
+    (cd -- "$DESTINO" && git "$@")
+  fi
+}
+
 validar_destino() {
   local salida
   [ -e "$DESTINO_ARG" ] || error_uso "el destino no existe: $DESTINO_ARG"
   [ -d "$DESTINO_ARG" ] || error_uso "el destino no es una carpeta: $DESTINO_ARG"
   DESTINO=$(cd -- "$DESTINO_ARG" && pwd) || error_uso "no pude entrar al destino: $DESTINO_ARG"
-  salida=$(git -C "$DESTINO" rev-parse --is-inside-work-tree --show-prefix 2>&1) ||
+  salida=$(git_destino rev-parse --is-inside-work-tree --show-prefix 2>&1) ||
     error_uso "el destino no es un repo git: $DESTINO (git: ${salida%%$'\n'*})"
   case "$salida" in
     true) ;;
@@ -356,7 +367,7 @@ validar_manifiesto() {
 identificar_repo() {
   local url
   TIENE_ORIGIN=0
-  url=$(git -C "$DESTINO" remote get-url origin 2>/dev/null) && TIENE_ORIGIN=1
+  url=$(git_destino remote get-url origin 2>/dev/null) && TIENE_ORIGIN=1
   if [ "$TIENE_ORIGIN" -eq 1 ] && origen_github "$url"; then
     DUENO=$DUENO_ORIGIN
     REPO=$REPO_ORIGIN
@@ -393,7 +404,7 @@ detectar_modo() {
     es_archivo_de_repo_nuevo "$f" && continue
     MODO_DETECTADO=existente
     break
-  done < <(git -C "$DESTINO" ls-files -z 2>/dev/null)
+  done < <(git_destino ls-files -z 2>/dev/null)
 }
 
 # detectar_manifiestos: deja en PISTAS los manifiestos conocidos versionados, en cualquier carpeta.
@@ -405,7 +416,7 @@ detectar_manifiestos() {
   done
   while IFS= read -r -d '' f; do
     PISTAS+=("$f")
-  done < <(git -C "$DESTINO" ls-files -z -- "${specs[@]}" 2>/dev/null)
+  done < <(git_destino ls-files -z -- "${specs[@]}" 2>/dev/null)
 }
 
 # leer_plantilla <nombre>: deja en PLANTILLA el contenido de instalador/plantillas/<nombre>, sin \r.
@@ -635,16 +646,16 @@ procesar_archivos() {
 # ---------------------------------------------------------------------------
 
 rama_staging() {
-  if git -C "$DESTINO" show-ref --verify --quiet refs/heads/staging; then
+  if git_destino show-ref --verify --quiet refs/heads/staging; then
     RAMA=existe
-  elif git -C "$DESTINO" show-ref --verify --quiet refs/remotes/origin/staging; then
+  elif git_destino show-ref --verify --quiet refs/remotes/origin/staging; then
     RAMA=existe
     NOTAS+=("staging existe solo como origin/staging: no se creó la rama local; git switch staging la crea desde origin/staging.")
-  elif ! git -C "$DESTINO" rev-parse --verify --quiet 'HEAD^{commit}' > /dev/null 2>&1; then
+  elif ! git_destino rev-parse --verify --quiet 'HEAD^{commit}' > /dev/null 2>&1; then
     RAMA='sin commits'
   else
     RAMA=crear
-    if [ "$APLICAR" -eq 1 ] && ! git -C "$DESTINO" branch --no-track staging HEAD > /dev/null 2>&1; then
+    if [ "$APLICAR" -eq 1 ] && ! git_destino branch --no-track staging HEAD > /dev/null 2>&1; then
       printf 'instalar.sh: no pude crear la rama staging\n' >&2
       FALLOS=$((FALLOS + 1))
     fi
@@ -745,6 +756,7 @@ main() {
   analizar_argumentos "$@"
   ubicar_fuente
   validar_destino
+  cd -- "$DESTINO" || error_uso "no pude entrar al destino: $DESTINO"
   leer_conf
   [ -f "$DIR_INSTALADOR/manifiesto.txt" ] || error_fuente "falta el manifiesto: $DIR_INSTALADOR/manifiesto.txt"
   leer_manifiesto "$DIR_INSTALADOR/manifiesto.txt"
@@ -757,7 +769,7 @@ main() {
     detectar_modo
     MODO=$MODO_DETECTADO
   fi
-  ACTIVA=$(git -C "$DESTINO" symbolic-ref --short -q HEAD 2> /dev/null) || ACTIVA=''
+  ACTIVA=$(git_destino symbolic-ref --short -q HEAD 2> /dev/null) || ACTIVA=''
   generar
 
   if [ "$APLICAR" -eq 1 ]; then
