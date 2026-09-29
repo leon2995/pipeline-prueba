@@ -175,7 +175,7 @@ Por qué cada una:
 
    Si algún push o commit del agente sale como `leon2995` (o vacío), o tus propios pushes salen como `talos-bot-leon`, detén el pipeline y repite las verificaciones de los pasos c y f antes de seguir.
 
-4. Con `.claude/identidad-agente.txt` activo, el hook bloquea de más, con un mensaje sobre el remoto, un `git push` sin remoto y con redirección (`git push 2>&1 | tail -3`) y un comando cuyo texto entre comillas diga `git push` seguido de otra palabra (`-m "... git push antes ..."`, `--title "... git push con ..."`). La forma que pasa es `git push <remoto> <rama>`, los mensajes por `-F` y los títulos sin `git push`.
+4. Con `.claude/identidad-agente.txt` activo, el agente verifica que un push normal pase (`git push -u origin <rama>`, `git push` sin remoto y `git push 2>&1 | tail -3`) y que su commit y su push salgan como `talos-bot-leon`.
 
 Si en el punto 1 GitHub pide una aprobación, o en el punto 2 no la pide, el comportamiento de "code owners con 0 aprobaciones" no es el esperado. La alternativa es subir `staging` a 1 aprobación (y entonces apruebas todo PR a `staging`) o usar un ruleset con la revisión de code owners.
 
