@@ -1,0 +1,33 @@
+{
+  "task": "lecciones-1",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "media",
+      "file": ".pipeline/lecciones-pendientes.md",
+      "detail": "Se descartan 8 pendientes con el argumento de que su patrón ya está en el encabezado de .claude/hooks/guard-commands.sh, pero 3 de ellas no aparecen en ningún comentario del archivo. Busqué con Grep en todas las líneas de comentario. (1) PR #4, flags booleanos en forma con valor (`--flag=true`, `-f=true`): no hay ninguna mención de '=true' salvo 'enforce_admins en true' en la línea 8. (2) PR #6, excepción por flag (`--help`, `-X GET`) reconocida solo como token fuera de comillas: no hay ninguna mención de 'help'. (3) PR #10, primera mitad: los delimitadores de subshell '(' y ')' quedan pegados a los tokens al usar xargs o set --: no se documenta. Las demás sí están cubiertas: objetivo implícito y número explícito en la línea 386, cd y pushd en la 393, PowerShell en las 79 y 395, análisis por segmento y comillas en las 41 a 55, remoto de git push en las 49 a 55. Las 3 no cubiertas desaparecen del repo. El historial solo da conteos y remite al cuerpo del PR, que no vive en el repo, y a 'los veredicto-*.json citados', que ya no se citan en ninguna parte del archivo.",
+      "fix": "Hay dos caminos. Uno: listar en el Historial cada pendiente descartada con su archivo de veredicto y dónde queda cubierta, con la línea del encabezado o 'sin cobertura, descartada por Leonardo'. Otro: documentar esos 3 patrones en el encabezado de guard-commands.sh, que es ruta de gobierno y lo hace el CTO. Como mínimo, la línea del historial debe nombrar los veredicto-*.json de origen para que la trazabilidad no dependa del cuerpo del PR."
+    },
+    {
+      "severity": "media",
+      "file": ".pipeline/lecciones-pendientes.md",
+      "detail": "Alcance extra y pérdida de historial. (a) Se agrega una regla permanente: 'Criterio de Leonardo para el PR de lecciones: a LESSONS.md van como máximo 5 lecciones generales por PR, y se descartan las específicas del hook'. La instrucción de Leonardo era para este PR ('Propón máximo 5 generales'), no una regla fija 'por PR'. Además, las reglas del flujo de lecciones viven en CLAUDE.md (Memoria del sistema, líneas 167 a 172), así que esta crea una segunda fuente de reglas fuera de gobierno. (b) Se borra sin moverla al Historial la nota de una decisión previa de Leonardo: 'Quedan fuera las lecciones de los PRs #1 y #2 (hook-force-push y audit-codex-stdin): Leonardo decidió dejar en LESSONS.md solo las dos lecciones generales de esa época, y no llevar la de las citas.'",
+      "fix": "Pasar la frase del criterio al Historial como decisión de este PR ('2026-09-28, criterio de Leonardo para lecciones-1: ...'), sin formularla como regla permanente. Si Leonardo la quiere permanente, que vaya a CLAUDE.md por PR de gobierno. Mover al Historial la nota de los PRs #1 y #2 en lugar de borrarla."
+    },
+    {
+      "severity": "baja",
+      "file": "LESSONS.md",
+      "detail": "La lección de 'controles fail-closed' agrega 'y el remoto reales de un push', que no está en la pendiente de origen (PR #6, veredicto-codex-cuenta-agente-intento2.json). Esa pendiente habla solo de la ruta de credenciales. El remoto viene de la pendiente de parseo del hook, que se descartó. Algo parecido pasa en 'pruebas de reglas nuevas': la justificación 'una regresión que bloquea de más deja la suite en verde' no está en el original del PR #10. Y en 'dos cuentas', 'verifica las dos identidades' generaliza el original 'verificar después el helper del sistema'. Son ajustes razonables, pero no son texto fiel.",
+      "fix": "Volver al sentido del original: 'la ruta de credenciales que usará la operación protegida'. Marcar las justificaciones añadidas como redacción del CTO o quitarlas."
+    },
+    {
+      "severity": "baja",
+      "file": "LESSONS.md",
+      "detail": "El formato declarado es `- [AAAA-MM-DD] [T#] patrón: ...` con una sola subtarea. Tres líneas usan dos etiquetas en el mismo corchete: [cuenta-agente, vencimiento-token]. Por lo demás, las 5 líneas nuevas siguen el formato. Además, se quita la línea en blanco del final del archivo.",
+      "fix": "Aceptar las etiquetas múltiples de forma explícita en el encabezado de LESSONS.md, o usar una sola subtarea principal. Conservar el salto de línea final."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "[2026-09-28] [lecciones-1] PR de lecciones: descartar una pendiente porque 'ya está documentada en X' exige citar la línea de X que la cubre; si no existe, el patrón sale del repo sin rastro. El historial debe listar cada descartada con su veredicto de origen."
+}

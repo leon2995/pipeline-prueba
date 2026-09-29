@@ -1,0 +1,44 @@
+{
+  "task": "remoto-git-push",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "scripts/test-hooks.sh",
+      "detail": "La máquina de estados nueva (guard-commands.sh:316-324, estado 1 con opciones globales de git y el fail-closed de la línea 339 'no pude leer el git push') no tiene ningún caso positivo con la identidad completa. En la sección 'con la identidad de talos-bot-leon' (líneas 489-529) no aparecen 'git -C . push -u origin feat/x', 'git -C \"dir con espacios\" push origin feat/x' ni 'git -c k=v push origin feat/x'. El único 'git -C . push' (línea 478) corre con identidad incompleta y se bloquea antes, así que no pasa por la lectura del remoto. Leyendo el código, hoy -C sí consume su valor, pero una regresión en esa rama (por ejemplo sacar -C de la lista de la línea 320) bloquearía 'git -C dir push', un comando cotidiano, y la suite seguiría en verde.",
+      "fix": "Agregar con la identidad completa: g permite 'git -C . push -u origin feat/x', g permite 'git -C \"a b\" push origin feat/x', g permite 'git -c core.x=y push origin feat/x' y g bloquea 'git -C . push git@github.com:o/r.git feat/x' 'no es HTTPS'.",
+      "categoria": "otro"
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "Falso positivo nuevo con el fail-closed de la línea 339. Con '(cd dir && git push)' o '(git push)', el segmento ' git push)' se detecta como push. xargs devuelve los tokens 'git' y 'push)'. En el estado 1, 'push)' cae en '*) estado=0' y el hook bloquea con 'no pude leer el git push'. El hook anterior lo dejaba pasar: comparaba t = push, no lo encontraba y asumía origin. '(cd x && git push -u origin feat/x)' sí pasa, porque el ')' queda pegado a la rama.",
+      "fix": "Antes del case de los estados 1 y 2, quitar los ')' del final del token (t=${t%%)*}), o tratar 'push)' como push. Agregar g permite '(cd . && git push)' con la identidad completa.",
+      "categoria": "falso_positivo"
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "La línea 264 quita primero todas las comillas dobles y después las simples, así que desempareja comillas anidadas. Con 'VAR='a\"b' git push \"git@github.com:o/r.git\" feat/x', el sed reemplaza '\"b' git push \"' como si fuera un texto entre comillas dobles, el 'git push' desaparece y no se revisa el remoto SSH. El hook anterior lo bloqueaba. Esto exige una comilla doble dentro de un valor entre comillas simples antes del git del mismo segmento, así que es ofuscación deliberada y queda fuera del modelo de amenaza.",
+      "fix": "Documentarlo en el encabezado como límite, o quitar las comillas con un recorrido de izquierda a derecha que respete cuál abrió primero (awk o un bucle en bash).",
+      "categoria": "evasion_analizador_shell"
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "git acepta prefijos únicos de las opciones largas (--push-opt, --rec, --exe, --rep=), pero las líneas 329-332 solo reconocen el nombre completo. Con 'git push --push-opt https://github.com/o/r.git git@github.com:o/r.git feat/x', la URL HTTPS se lee como remoto y el comando pasa. Con 'git push --rep=git@github.com:o/r.git' se asume origin. analizar_git sí maneja prefijos para --force. Un agente no escribe prefijos por error, así que queda fuera del modelo de amenaza y del alcance estricto.",
+      "fix": "Opcional: reconocer los prefijos de 3 o más caracteres de --push-option, --receive-pack, --exec y --repo, como prefijo() en analizar_git, o documentar el límite en el encabezado.",
+      "categoria": "fuera_de_alcance"
+    },
+    {
+      "severity": "baja",
+      "file": ".pipeline/evidencia/remoto-git-push.md",
+      "detail": "La evidencia deja RESULTADO_ROJO sin llenar y no aparece en el diff ea38720..fix/remoto-git-push. Revisé el rojo leyendo el hook de ea38720. Con el hook anterior fallan: 'git push 2>&1 | tail -3', 'git push >/dev/null' y 'git push 2> err.txt' (remoto '2>' o '>/dev/null'); los casos de -m y --title (remoto 'antes' o 'con'); 'git push origin \"feat/x' (antes pasaba); '-o ci.skip' y '--push-option ci.skip' (remoto 'ci.skip'); los cinco casos con valor https delante de SSH (antes pasaban); y los cuatro de --repo (antes bloqueaban con el motivo '--repo'). La mutación sí detecta el cambio.",
+      "fix": "Llenar RESULTADO_ROJO con la salida real contra el hook de staging y commitear la evidencia en la rama.",
+      "categoria": "otro"
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [remoto-git-push] tokenizar shell: al partir segmentos con xargs o set --, los delimitadores de subshell '(' y ')' quedan pegados a los tokens; normalízalos antes de comparar subcomandos, y prueba cada rama nueva de una máquina de estados con al menos un caso que deba pasar."
+}

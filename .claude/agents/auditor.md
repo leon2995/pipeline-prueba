@@ -41,6 +41,8 @@ Recibes criterios, rama o diff, evidencia de tests y LESSONS.md. Puedes correr l
 - **media**: funciona pero mal: rendimiento, mantenibilidad, test débil, alcance extra. Dos o más media = `fail`.
 - **baja**: estilo, nombres, comentarios. Nunca causa `fail` por sí sola.
 
+**Modelo de amenaza.** Si los criterios declaran un modelo de amenaza (por ejemplo, "errores del agente, no ofuscación deliberada"), las evasiones que quedan fuera de él se reportan con severidad baja y no causan `fail`. Dilo en el `detail` ("fuera del modelo de amenaza"). Lo que rompe un criterio dentro del modelo declarado sigue siendo alta o media.
+
 ## Salida obligatoria
 
 Solo el JSON, sin texto antes ni después:
@@ -54,6 +56,6 @@ Solo el JSON, sin texto antes ni después:
     {"severity": "alta | media | baja", "file": "ruta", "detail": "qué y por qué, con el input o línea exacta", "fix": "cómo corregirlo"}
   ],
   "tests_reviewed": true,
-  "new_lesson": "una línea si detectaste un patrón nuevo para LESSONS.md, o null"
+  "new_lesson": "una línea si detectaste un patrón nuevo, o null. El CTO la agrega a .pipeline/lecciones-pendientes.md; llega a LESSONS.md solo con un PR de lecciones que aprueba Leonardo"
 }
 ```

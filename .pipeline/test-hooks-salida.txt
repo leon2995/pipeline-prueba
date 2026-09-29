@@ -221,6 +221,26 @@ ok     bloquea  gh auth status --show-token
 ok     bloquea  gh auth git-credential get
 ok     bloquea  git credential fill < /dev/null
 ok     bloquea  git credential approve
+ok     bloquea  git credential reject
+ok     bloquea  printf x | git credential fill
+ok     bloquea  git -C . credential fill
+ok     bloquea  git credential-manager github logout leon2995
+ok     bloquea  git credential-manager github login --username leon2995 --device
+ok     bloquea  git credential-manager get
+ok     bloquea  git credential-manager store
+ok     bloquea  git credential-manager erase
+ok     bloquea  git credential-manager configure
+ok     bloquea  git credential-manager
+ok     bloquea  git-credential-manager github logout x
+ok     bloquea  git-credential-manager.exe github logout x
+ok     bloquea  git -C . credential-manager github logout x
+ok     bloquea  git credential-manager github list; git credential-manager github logout x
+ok     bloquea  git credential-manager github list && git credential-manager github logout x
+ok     bloquea  git credential-manager github logout x # git credential-manager github list
+ok     bloquea  git credential-manager-core erase
+ok     bloquea  git-credential-manager-core github logout x
+ok     bloquea  /mingw64/bin/git-credential-manager.exe github logout x
+ok     bloquea  git -c core.x=y credential-manager erase
 ok     bloquea  env
 ok     bloquea  ls && env
 ok     bloquea  env | sort
@@ -275,9 +295,156 @@ ok     permite  printenv PATH
 ok     permite  printenv -0 PATH
 ok     permite  env LC_ALL=C sed -i s/a/b/ f
 ok     permite  env LANG=C sort -
-== guard-commands.sh: identidad de talos-bot (C4), con copia del hook y gh falso
+ok     permite  git credential-manager github list
+ok     permite  git credential-manager github list --url https://github.com
+ok     permite  git credential-manager github list 2>&1 | head -3
+ok     permite  git grep -n credential-manager SETUP.md
+ok     permite  git log -S credential-manager --oneline
+== guard-commands.sh: Railway, solo lecturas (T3a)
+ok     permite  railway --help
+ok     permite  railway -V
+ok     permite  railway --version
+ok     permite  railway help up
+ok     permite  railway up --help
+ok     permite  railway status
+ok     permite  railway status --json
+ok     permite  railway whoami
+ok     permite  railway logs
+ok     permite  railway logs | tail -n 200
+ok     permite  railway list
+ok     permite  railway ls
+ok     permite  railway metrics
+ok     permite  railway docs
+ok     permite  railway environment link staging
+ok     permite  railway environment list
+ok     permite  railway env ls
+ok     permite  railway environment config
+ok     permite  railway environment link production
+ok     permite  railway service list
+ok     permite  railway service status
+ok     permite  railway service logs
+ok     permite  railway domain list
+ok     permite  railway domain status x.up.railway.app
+ok     permite  railway deployment list
+ok     permite  railway project list
+ok     permite  railway volume list
+ok     permite  railway variables --kv | cut -d= -f1
+ok     permite  railway variable list --kv | cut -d= -f1
+ok     permite  railway vars --kv | cut -d= -f1
+ok     permite  railway usage
+ok     permite  railway usage projects
+ok     permite  railway api schema
+ok     permite  railway api search deployment
+ok     permite  railway api describe Service
+ok     permite  railway config plan
+ok     permite  railway config plan --detailed-exit-code
+ok     permite  railway config migrate
+ok     permite  railway.exe status
+ok     permite  /usr/local/bin/railway status
+ok     permite  npx @railway/cli status
+ok     permite  npx -y @railway/cli logs
+ok     permite  NO_COLOR=1 railway status
+ok     permite  (railway status)
+ok     permite  grep -rn railway SETUP.md
+ok     permite  cat .railway/railway.ts
+ok     permite  echo railway up
+ok     permite  ls .railway
+ok     permite  if railway status; then echo ok; fi
+ok     permite  for i in 1 2; do railway logs; done
+ok     permite  timeout 30 railway status
+ok     permite  railway ssh --help
+ok     permite  railway run --help
+ok     permite  railway variable set --help
+ok     bloquea  railway up
+ok     bloquea  railway up --detach
+ok     bloquea  railway redeploy
+ok     bloquea  railway restart
+ok     bloquea  railway down
+ok     bloquea  railway deploy -t x
+ok     bloquea  railway add --repo o/r
+ok     bloquea  railway init --name x
+ok     bloquea  railway link
+ok     bloquea  railway unlink
+ok     bloquea  railway login
+ok     bloquea  railway logout
+ok     bloquea  railway run npm start
+ok     bloquea  railway shell
+ok     bloquea  railway ssh
+ok     bloquea  railway connect postgres
+ok     bloquea  railway domain
+ok     bloquea  railway domain --port 8080
+ok     bloquea  railway domain delete x.up.railway.app
+ok     bloquea  railway environment new staging
+ok     bloquea  railway env delete staging
+ok     bloquea  railway environment edit
+ok     bloquea  railway service redeploy
+ok     bloquea  railway service web
+ok     bloquea  railway variable set FOO=1
+ok     bloquea  railway variables set FOO=1
+ok     bloquea  railway var delete FOO
+ok     bloquea  railway volume add
+ok     bloquea  railway project delete
+ok     bloquea  railway delete
+ok     bloquea  railway config apply
+ok     bloquea  railway config pull
+ok     bloquea  railway config init
+ok     bloquea  railway config plan --show-values
+ok     bloquea  railway config plan --decrypt-variables
+ok     bloquea  railway config migrate --apply
+ok     bloquea  railway config migrate --delete-files
+ok     bloquea  railway usage limit set 50
+ok     bloquea  railway api 'mutation { x }'
+ok     bloquea  railway api 'query { me { id } }'
+ok     bloquea  railway mcp
+ok     bloquea  railway setup agent -y
+ok     bloquea  railway upgrade --yes
+ok     bloquea  railway.exe up
+ok     bloquea  /usr/local/bin/railway up
+ok     bloquea  npx @railway/cli up
+ok     bloquea  npx -y @railway/cli redeploy
+ok     bloquea  NO_COLOR=1 railway up
+ok     bloquea  (railway up)
+ok     bloquea  git status && railway up
+ok     bloquea  railway status; railway down
+ok     bloquea  railway environment staging
+ok     bloquea  railway env production
+ok     bloquea  for i in 1 2 3; do railway up --detach && break; sleep 10; done
+ok     bloquea  if ! railway up; then echo fallo; fi
+ok     bloquea  then railway redeploy
+ok     bloquea  { railway down; }
+ok     bloquea  while true; do railway restart; done
+ok     bloquea  timeout 600 railway up
+ok     bloquea  xargs -n 1 railway up
+ok     bloquea  nice -n 10 railway up
+ok     bloquea  time railway up
+ok     bloquea  watch -n 5 railway redeploy
+ok     bloquea  railway ssh -- df -h
+ok     bloquea  railway ssh free -h
+ok     bloquea  railway run -- node x.js --help
+ok     bloquea  railway run pytest -V
+ok     bloquea  railway variables --kv
+ok     bloquea  railway vars --kv
+== guard-commands.sh: sesión de Railway de Leonardo (T3a)
+ok     bloquea  cat ~/.railway/config.json
+ok     bloquea  ls ~/.railway
+ok     bloquea  cat $HOME/.railway/config.json
+ok     bloquea  cat ${HOME}/.railway/config.json
+ok     bloquea  type C:/Users/dev/.railway/config.json
+ok     bloquea  ls /c/Users/dev/.railway
+ok     bloquea  grep token .railway/config.json
+ok     bloquea  echo $RAILWAY_TOKEN
+ok     bloquea  RAILWAY_API_TOKEN=x railway status
+ok     bloquea  cat "C:\Users\dev\.railway\config.json"
+ok     bloquea  ls /home/dev/.railway
+ok     bloquea  dir %USERPROFILE%\.railway
+ok     bloquea  ls $USERPROFILE/.railway
+ok     permite  cat .railway/railway.ts
+ok     permite  ls C:/Users/dev/proyectos/app/.railway
+ok     permite  cat $USERPROFILE/proyectos/app/.railway/railway.ts
+ok     permite  echo $USERPROFILE
+== guard-commands.sh: identidad del bot talos-bot-leon (C4), con copia del hook y gh falso
 -- identidad
--- sin la identidad de talos-bot
+-- sin la identidad de talos-bot-leon
 ok     bloquea  git commit -m x
 ok     bloquea  git push -u origin feat/x
 ok     bloquea  gh pr create --title x --body y
@@ -312,7 +479,7 @@ ok     permite  gh api -X GET repos/{owner}/{repo}/pulls/5
 ok     permite  gh pr merge --help
 ok     bloquea  gh pr create --title "T3: soporte de --help" --body-file b.md
 ok     bloquea  gh pr comment 5 --body 'usa -h para ver opciones'
--- con la identidad de talos-bot
+-- con la identidad de talos-bot-leon
 ok     permite  git commit -m x
 ok     permite  git push -u origin feat/x
 ok     permite  gh pr create --title x --body y
@@ -324,7 +491,42 @@ ok     bloquea  gh pr merge 102 --squash
 ok     bloquea  git push -u remoto-inexistente feat/x
 ok     bloquea  git push git@github.com:leon2995/pipeline-prueba.git feat/x
 ok     bloquea  git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x
+-- remoto de git push: redirecciones, texto entre comillas y opciones con valor (remoto-git-push)
+ok     permite  git push
+ok     permite  git push 2>&1 | tail -3
+ok     permite  git push >/dev/null
+ok     permite  git push origin feat/x 2>/dev/null
+ok     permite  git push 2> err.txt
+ok     permite  git commit -m "docs: el hook revisa git push antes del PR"
+ok     permite  gh pr create --title "T4: git push con helper" --body-file b.md
+ok     permite  git commit -m 'git push origin feat/x'
+ok     permite  git push origin feat/x -o "ci skip"
+ok     bloquea  git push "git@github.com:o/r.git" feat/x
+ok     bloquea  git push "https://leon2995@github.com/o/r.git" feat/x
+ok     bloquea  git commit -m x && git push git@github.com:o/r.git feat/x
+ok     bloquea  git push origin "feat/x
+ok     permite  git push -o ci.skip origin feat/x
+ok     permite  git push --push-option=ci.skip origin feat/x
+ok     permite  git push --push-option ci.skip origin feat/x
+ok     bloquea  git push -o https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --push-option https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --receive-pack https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --exec https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push -uo https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push -oci.skip git@github.com:o/r.git feat/x
+ok     bloquea  git push --receive-pack=x --exec=y git@github.com:o/r.git feat/x
+ok     permite  git push --repo=origin
+ok     permite  git push --repo origin
+ok     bloquea  git push --repo git@github.com:o/r.git
+ok     bloquea  git push --repo=https://leon2995@github.com/o/r.git
 ok     bloquea  git push --repo=origin feat/x
+ok     permite  git -C . push -u origin feat/x
+ok     permite  git -C "a b" push origin feat/x
+ok     permite  git -c core.x=y push origin feat/x
+ok     bloquea  git -C . push git@github.com:o/r.git feat/x
+ok     permite  (cd . && git push)
+ok     permite  (git push origin feat/x)
+ok     bloquea  (git push git@github.com:o/r.git feat/x)
 -- identidad incompleta o de otra cuenta
 ok     bloquea  git commit -m x
 ok     bloquea  git commit -m x
@@ -338,11 +540,12 @@ ok     bloquea  gh pr create --title x --body y
 ok     permite  git commit -m x
 -- identidad-vacia
 ok     bloquea  git commit -m x
--- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot
+-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot-leon
 ok     permite  git commit -m x
 ok     permite  git push -u origin feat/x
 == CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)
 ok     pasa     el CODEOWNERS del repo coincide con rutas-gobierno.txt
+ok     falla    con otro dueño en pipeline.conf, el CODEOWNERS del repo no coincide
 ok     falla    CODEOWNERS al que le falta una regla
 ok     falla    CODEOWNERS con una regla de más
 ok     falla    CODEOWNERS con otro dueño
@@ -365,7 +568,17 @@ ok     pasa     settings.json deniega Write(**/.claude/settings.local.json)
 ok     pasa     settings.json deniega Read(~/.talos-gh/**)
 ok     pasa     settings.json deniega Edit(~/.talos-gh/**)
 ok     pasa     settings.json deniega Write(~/.talos-gh/**)
+ok     pasa     settings.json deniega Read(~/.railway/**)
+ok     pasa     settings.json deniega Edit(~/.railway/**)
+ok     pasa     settings.json deniega Write(~/.railway/**)
+ok     pasa     settings.json deniega mcp__railway
+ok     falla    settings.json ya no aprueba solo Bash(railway environment*)
 ok     pasa     .gitignore ignora .claude/settings.local.json
+ok     pasa     .gitignore ignora .claude/worktrees/ (worktrees del engineer)
+ok     pasa     pipeline.conf define dueno
+ok     pasa     pipeline.conf define bot
+ok     pasa     pipeline.conf define bot_email
+ok     pasa     el email del bot es el noreply del bot
 ok     pasa     jq está instalado (requerido por los chequeos de la plantilla)
 ok     pasa     la plantilla es JSON válido
 ok     pasa     la plantilla apunta GH_CONFIG_DIR a ~/.talos-gh
@@ -374,8 +587,8 @@ ok     pasa     la plantilla fija GIT_CONFIG_KEY_0
 ok     pasa     la plantilla vacía el helper con GIT_CONFIG_VALUE_0
 ok     pasa     la plantilla fija GIT_CONFIG_KEY_1
 ok     pasa     la plantilla usa gh como helper en GIT_CONFIG_VALUE_1
-ok     pasa     la plantilla fija el autor talos-bot
-ok     pasa     la plantilla fija el committer talos-bot
+ok     pasa     la plantilla fija el autor talos-bot-leon
+ok     pasa     la plantilla fija el committer talos-bot-leon
 ok     pasa     la plantilla usa el email noreply del autor
 ok     pasa     la plantilla usa el email noreply del committer
 ok     falla    la plantilla no trae prefijos de token
@@ -385,6 +598,25 @@ ok     pasa     el job hooks corre la suite con mawk
 ok     pasa     el job hooks instala mawk si falta (no lo omite)
 ok     pasa     CI corre en pull_request
 ok     pasa     CI corre en push a feat/** y fix/** (bajo push:)
+== protocolo: lecciones, proceso ligero y auditores (lecciones, T2)
+ok     pasa     existe .pipeline/lecciones-pendientes.md
+ok     falla    .pipeline/ no es ruta de gobierno
+ok     pasa     CLAUDE.md: el new_lesson va a lecciones pendientes
+ok     pasa     CLAUDE.md: un PR de lecciones al cierre del proyecto o con 5 pendientes
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (Fase 3, paso 3)
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (tabla de roles)
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (Memoria del sistema)
+ok     pasa     CLAUDE.md: el new_lesson de Codex también va a pendientes
+ok     pasa     CLAUDE.md: el router dice que el proceso ligero no ejecuta JEV
+ok     pasa     SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager
+ok     pasa     CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno
+ok     pasa     CLAUDE.md: el proceso ligero exige code owners activo en staging y main
+ok     pasa     auditor.md: evasiones fuera del modelo de amenaza con severidad baja
+ok     pasa     auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja
+ok     pasa     auditor.md: el new_lesson va a lecciones pendientes
+ok     pasa     engineer.md: el hook Stop declara timeout: 600
+ok     pasa     engineer.md: en su worktree hace git switch a la rama de la subtarea
+ok     pasa     CLAUDE.md: el CTO no deja activa la rama de la subtarea en su checkout
 == readonly-guard.sh (auditor)
 ok     permite  git diff staging...HEAD
 ok     permite  git log --oneline -5
@@ -413,6 +645,20 @@ ok     bloquea  C:\Users\dev\repo\docs\adr\0001-stack.md
 ok     bloquea  C:\Users\dev\repo\.github\workflows\ci.yml
 ok     permite  C:\Users\dev\repo\src\app.py
 ok     permite  C:\Users\dev\repo\tests\unit\test_app.py
+ok     permite  C:\Users\dev\repo\.claude\worktrees\agent-a1\src\app.py
+ok     permite  C:\Users\dev\repo\.claude\worktrees\agent-a1\tests\unit\test_app.py
+ok     permite  /home/dev/repo/.claude/worktrees/agent-a1/src/app.py
+ok     permite  /home/dev/repo/.claude/worktrees/agent-a1/instalador/instalar.sh
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\tests\acceptance\test_c1.py
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\.claude\hooks\guard-commands.sh
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\.claude\settings.json
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\CLAUDE.md
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\LESSONS.md
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\docs\adr\0001-stack.md
+ok     bloquea  C:\Users\dev\repo\.claude\worktrees\agent-a1\.github\workflows\ci.yml
+ok     bloquea  /home/dev/repo/.claude/worktrees/agent-a1/../../hooks/guard-commands.sh
+ok     bloquea  /home/dev/repo/.claude/worktrees/agent-a1/src/../../../settings.json
+ok     bloquea  /home/dev/repo/.claude/worktrees/
 ok     bloquea  C:\Users\dev\repo\CLAUDE.md + \r final
 == only-acceptance-tests.sh (test-writer)
 ok     permite  tests/acceptance/test_c1.py
@@ -436,4 +682,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-395 ok, 0 fallos
+637 ok, 0 fallos

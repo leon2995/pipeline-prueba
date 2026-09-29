@@ -1,0 +1,33 @@
+{
+  "task": "vencimiento-token",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "Revisé los criterios contra el diff origin/staging...origin/docs/vencimiento-token. C1 se cumple en README.md, línea 3: una línea, remite a CLAUDE.md y SETUP.md y nombra talos-bot-leon. C2 se cumple en SETUP.md: la línea 102 trae la decisión de scopes, con su razón (0 repos propios y 0 organizaciones), los 21 scopes clasificados y la condición de revisión, que ahora incluye los repos propios; la línea 141 trae el vencimiento 2026-10-29 02:05 UTC (2026-10-28 en hora local), la rotación a más tardar el 2026-10-15 y la indicación de responder No. C3 se cumple: gh auth status con prefijo en las líneas 112 a 117, el comando del vencimiento con prefijo en las líneas 118 y 141, y el remedio en tres pasos en las líneas 125 a 137, con el comando protegido contra el caso vacío en la línea 136. C4 se cumple: gh auth status sin -t enmascara el token, el grep deja solo la cabecera y el token pasa por la tubería hasta GH_TOKEN sin salir por stdout. C5 se cumple: git log muestra que c721010, fb27602 y ec51797 tienen autor y committer talos-bot-leon <335185800+talos-bot-leon@users.noreply.github.com>. Los seis hallazgos del intento 1 están corregidos. El problema es este: la línea 125 dice 'Lo corres tú en tu terminal, no el agente: el hook le bloquea estos comandos.' Contra .claude/hooks/guard-commands.sh eso es falso para los pasos 1 y 2 y para `github list`. La regla de la línea 67 solo detecta `git ... credential (fill|approve|reject)` y la de la línea 124 solo `git config ...credential` y `-c ...credential`. `git credential-manager github logout talos-bot-leon` y `git credential-manager github login --username leon2995 --device` no coinciden con ninguna regla, y ningún archivo de .claude/ menciona credential-manager. El documento le da a Leonardo una protección que no existe: el agente sí podría correr, por ejemplo, `git credential-manager github logout leon2995` y borrar su credencial del Credential Manager.",
+      "fix": "Corregir la razón en la línea 125, por ejemplo: 'Lo corres tú en tu terminal, no el agente: afecta tu Credential Manager, y el hook le bloquea al agente `git credential fill` y `git config ... credential`.' Aparte, en un PR de gobierno que apruebe Leonardo, agregar a guard-commands.sh el bloqueo de `git credential-manager` con los subcomandos login, logout y erase."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "En la línea 136, el `|| echo 'sin credencial guardada'` también salta cuando sí hay credencial pero `gh api user` falla. Input: el token guardado de leon2995 está vencido o revocado (HTTP 401), o no hay red. La salida es el error de gh seguido de 'sin credencial guardada', y el texto de la línea 133 manda a repetir el paso 2 por una causa equivocada. No imprime el token y no da un falso positivo de leon2995.",
+      "fix": "Separar los dos casos: `{ read -r t && [ -n \"$t\" ] || { echo 'sin credencial guardada'; exit; }; GH_TOKEN=\"$t\" gh api user --jq .login; }`, o aclarar en la línea 133 que un error HTTP previo indica un token inválido y no una credencial ausente."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/LESSONS.md",
+      "detail": "El new_lesson del intento 1 (prefijo de configuración del bot en todo comando que se refiere a su cuenta) no está en LESSONS.md. Se explica porque **/LESSONS.md es ruta de gobierno (.claude/rutas-gobierno.txt, línea 18): meterlo en esta rama la convertiría en un PR de gobierno y anularía la prueba del merge con 0 aprobaciones. Aun así, queda pendiente frente al paso 5 del protocolo. La lección sí se respetó en el diff: todas las apariciones que se refieren al bot llevan el prefijo (líneas 108, 111, 112, 118 y 141), y la línea 153 corre dentro de la sesión del agente.",
+      "fix": "Agregar las dos lecciones, la del intento 1 y la de este veredicto, en un PR de gobierno aparte que apruebe Leonardo, y dejarlo anotado en el reporte."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/.pipeline/criterios-vencimiento-token.md",
+      "detail": "Siguen pendientes para después del PASS, según LESSONS.md: el CI en verde, la autoría del PR y el push como talos-bot-leon, y la corrección en el mensaje del squash de la fecha vieja 2026-12-27 del commit ec51797.",
+      "fix": "Verificarlos con el PR abierto y escribir el mensaje del squash con la fecha 2026-10-29."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [vencimiento-token] docs que afirman un control: si un documento dice que un hook bloquea un comando, verificarlo contra el regex del hook antes de escribirlo; si no, el documento promete una protección que no existe."
+}

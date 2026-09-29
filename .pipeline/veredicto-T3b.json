@@ -1,0 +1,45 @@
+{
+  "task": "T3b",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "instalador/plantillas/pasos-manuales.txt",
+      "detail": "Una instalación nueva no puede mergear ningún PR. scripts/test-hooks.sh:818 lee \"$repo/SETUP.md\" con tiene_texto, y C2 prohíbe copiar SETUP.md. Por eso el job hooks del CI falla en todo repo instalado. El paso 2c (líneas 10-45) vuelve obligatorio el check hooks en main y en staging. La evidencia declara este riesgo, pero ni los pasos manuales ni las notas del instalador lo mencionan. La primera instalación real queda con las dos ramas trabadas por un check que siempre falla. No rompe la letra de C2 ni de C7, pero rompe el objetivo del instalador de punta a punta.",
+      "fix": "Antes del primer proyecto real, hacer un PR de gobierno para que test-hooks.sh omita el chequeo de SETUP.md cuando el archivo no existe, o para agregar al manifiesto una versión mínima de SETUP.md con el cambio de criterios que eso implica. Mientras tanto, que los pasos manuales avisen antes del paso 2c que hooks va a fallar."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/instalar.sh",
+      "detail": "detectar_modo (líneas 399-408) no cuenta las rutas del manifiesto ni las generadas, y eso se aparta de la letra de C5 (\"con cualquier otro archivo versionado es existente\"). Ejemplo: un repo que solo versiona README.md y su propio CLAUDE.md o .github/workflows/ci.yml sale como modo nuevo. La razón del engineer se sostiene: una segunda corrida después de commitear sigue siendo nuevo y todo queda igual. El caso contrario es raro. Ninguna prueba cubre la desviación.",
+      "fix": "Que Leonardo acepte la desviación y se deje escrita en los criterios, o agregar una prueba unitaria que fije el comportamiento elegido."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/plantillas/railway.ts",
+      "detail": "No pude verificar `export const partial = '<repo>'` ni la forma de service() y project() contra railway@3.11.0 o la CLI 5.62.1: el hook de solo lectura bloqueó `railway <cmd> --help`. Lo mismo pasó con las sintaxis de `railway environment new --duplicate --service-config`, `railway variable set`, `railway domain --port` y `railway config plan/apply`. El texto impreso coincide literalmente con C7 y la prueba c7_comandos_exactos lo fija. La exactitud contra la CLI real depende de la verificación del CTO.",
+      "fix": "Que Leonardo lo confirme al leer la simulación del repo descartable, antes de correr railway config apply."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/plantillas/pasos-manuales.txt",
+      "detail": "La protección va en dos pasos: primero un PUT con contexts y después un PATCH de required_status_checks con checks y app_id 15368. C7 pedía el JSON con checks y app_id en el PUT. El estado final es el mismo, pero si el PATCH no se corre los checks quedan sin app_id. Además, si 2b no encuentra la invitación, $id queda vacío y el PATCH va a user/repository_invitations/, que da error pero no hace daño.",
+      "fix": "Aceptable como decisión del CTO. Si se quiere un solo paso, poner checks en el PUT. Para el id vacío, cortar antes: `[ -n \"$id\" ] || echo 'sin invitación'`."
+    },
+    {
+      "severity": "baja",
+      "file": "package.json",
+      "detail": "Con package.json en la raíz, run-tests.sh (hook Stop del engineer) corre npm test en cada cierre del engineer. La evidencia mide unos 2 min 20 s en Windows. engineer.md no declara timeout para ese hook, así que queda el valor por defecto de Claude Code, que puede ser menor. Si el hook se corta, C9 se cumple en papel y no en la práctica en Windows.",
+      "fix": "Declarar timeout explícito (por ejemplo 600) en el hook Stop de engineer.md con un PR de gobierno, o acortar las suites."
+    },
+    {
+      "severity": "baja",
+      "file": "tests/acceptance/test-instalador.sh",
+      "detail": "No pude correr las suites: readonly-guard bloqueó `bash tests/acceptance/test-instalador.sh`. La revisión de las pruebas es por lectura. Prueban comportamiento con repos reales: huella de archivos, ramas y status para C1; cmp byte a byte para C3; remoto bare con show-ref para C6; gh y railway falsos en el PATH para C6 y C7; destino con espacios para C10. No vi casos que pasen trivialmente. Los 4 `return 0` que se agregaron en 76b7fcd no cambian aserciones. El diff (unas 2600 líneas) pasa la guía de 400, pero lo justifica la cobertura que piden los criterios.",
+      "fix": "Correr npm test en el CI del PR (verificación posterior ya prevista) y comprobar 44 y 118 ok en el job node."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Cuando el manifiesto de un instalador excluye archivos del repo fuente, comprobar que las suites copiadas (test-hooks.sh, CI) no lean esos archivos; si los leen, el repo instalado nace con checks obligatorios en rojo."
+}

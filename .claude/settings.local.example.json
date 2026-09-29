@@ -6,9 +6,9 @@
     "GIT_CONFIG_VALUE_0": "",
     "GIT_CONFIG_KEY_1": "credential.https://github.com.helper",
     "GIT_CONFIG_VALUE_1": "!gh auth git-credential",
-    "GIT_AUTHOR_NAME": "talos-bot",
-    "GIT_AUTHOR_EMAIL": "ID_NUMERICO+talos-bot@users.noreply.github.com",
-    "GIT_COMMITTER_NAME": "talos-bot",
-    "GIT_COMMITTER_EMAIL": "ID_NUMERICO+talos-bot@users.noreply.github.com"
+    "GIT_AUTHOR_NAME": "talos-bot-leon",
+    "GIT_AUTHOR_EMAIL": "335185800+talos-bot-leon@users.noreply.github.com",
+    "GIT_COMMITTER_NAME": "talos-bot-leon",
+    "GIT_COMMITTER_EMAIL": "335185800+talos-bot-leon@users.noreply.github.com"
   }
 }

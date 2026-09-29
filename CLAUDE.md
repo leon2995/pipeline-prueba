@@ -8,7 +8,7 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 |---|---|---|---|
 | CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`) con ultracode (`"ultracode": true` en `.claude/settings.json`) |
 | test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan | Sonnet (`sonnet`), esfuerzo alto (`effort: high`) |
-| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md | Hereda modelo y esfuerzo de la sesión (`model: inherit`, sin `effort`) |
+| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md (nunca las lecciones pendientes) | Hereda modelo y esfuerzo de la sesión (`model: inherit`, sin `effort`) |
 | auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md | Opus 5.5 (`claude-opus-5-5`), esfuerzo alto (`effort: high`) |
 | Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Business) | Solo criterios y diff | `gpt-5.6-sol`, esfuerzo alto (`model_reasoning_effort="high"`) |
 | JEV (router) | `scripts/jev.py` | Veredictos. Determinista, sin LLM | No aplica |
@@ -16,9 +16,26 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 
 Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo que su fila indica, por escrito, dentro del prompt de delegación. Si necesitas que sepa algo más, escríbelo en el prompt; nunca asumas que lo sabe.
 
-**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot`, colaboradora del repo con escritura, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). Leonardo es `leon2995`: dueño del repo y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
+**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot-leon`, colaboradora del repo con escritura, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). Leonardo es `leon2995`: dueño del repo y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
 
-**Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles: el commit de pruebas va primero, la suite se corre contra `staging` para mostrar que detecta la regresión (mutación), auditan los dos auditores y Leonardo aprueba como code owner.
+**Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles:
+- el commit de pruebas va primero;
+- si el cambio tiene código o pruebas, la suite se corre contra `staging` para mostrar que detecta la regresión (mutación);
+- la auditoría que corresponda según el proceso ligero;
+- la aprobación de Leonardo como code owner.
+
+**Proceso ligero para PRs que solo tocan rutas de gobierno.** Van con una ronda del auditor Claude y la aprobación de Leonardo como code owner, sin Codex ni JEV, siempre que la protección con code owners esté activa en `staging` y `main`. Cómo se verifica la protección:
+- La configuración (`require_code_owner_reviews` en `true` en las dos ramas) solo la ve una cuenta admin. La verifica Leonardo con el GET del paso e de `SETUP.md`, y vuelve a hacerlo si cambia la protección.
+- Tú, como `talos-bot-leon`, verificas dos cosas:
+  - antes de aplicar la regla, que `gh api repos/<dueño>/<repo>/branches/<rama>` dé `protected: true` en `staging` y en `main`;
+  - al abrir el PR, que con los checks en verde quede `mergeable_state: blocked` y con el code owner en `requested_reviewers`.
+
+  Si alguna falla, trátalo como protección inactiva. Si `mergeable_state` responde `unknown`, reintenta en unos segundos: GitHub lo calcula de forma perezosa. Estos chequeos prueban que hay protección y que el PR no entra sin revisión, pero no que la revisión sea del code owner, porque GitHub pide la revisión del code owner con solo que exista `CODEOWNERS`. Esa garantía depende del GET de Leonardo.
+- Aplica en cualquier nivel de riesgo, por decisión de Leonardo. No lleva auditoría del plan (paso 1), ni Codex (paso 6), ni JEV (paso 7): la aprobación de Leonardo como code owner es el control efectivo.
+- Los archivos de `.pipeline/` (estado operativo) no cuentan como ruta fuera de gobierno.
+- Es una sola ronda: los hallazgos se corrigen o se documentan en el PR, y Leonardo decide al revisar.
+- Si la protección no está activa, va el protocolo completo de la Fase 3.
+- Los PRs de código de apps siguen siempre con el protocolo completo.
 
 ## Fase 0: Intake
 
@@ -30,6 +47,8 @@ Asigna nivel de riesgo. Es obligatorio y se escribe en el plan:
 - **bajo**: cambios internos sin datos ni integraciones. Automático hasta staging; producción con OK de Leonardo.
 - **medio**: toca API pública, base de datos sin migración, dependencias nuevas. Como bajo, más `/audit-codex` obligatorio.
 - **alto**: auth, pagos, datos personales, migraciones, integraciones externas, borrado de datos. Plan con OK de Leonardo, doble auditor (Claude y Codex), producción con OK.
+
+Los PRs que solo tocan rutas de gobierno van con el proceso ligero en cualquier nivel (ver arriba), sin `/audit-codex` ni doble auditor. El plan de riesgo alto sigue necesitando el OK de Leonardo.
 
 Si dudas del nivel, sube uno.
 
@@ -60,13 +79,13 @@ Divide el trabajo en subtareas secuenciales del tamaño de un PR (menos de 400 l
 
 Por cada subtarea, en este orden:
 
-1. **Auditoría del plan** (riesgo medio y alto). Delega a `auditor` en modo plan con el plan y los criterios de la subtarea. Si devuelve `fail`, corrige el plan y repite. Máximo 2 vueltas; a la tercera, escala a Leonardo.
+1. **Auditoría del plan** (riesgo medio y alto; no aplica en el proceso ligero). Delega a `auditor` en modo plan con el plan y los criterios de la subtarea. Si devuelve `fail`, corrige el plan y repite. Máximo 2 vueltas; a la tercera, escala a Leonardo.
 2. **Tests de aceptación.** Delega a `test-writer` con los criterios y las interfaces. Escribe tests en `tests/acceptance/` que fallen ahora. Commit aparte: `test(T1): criterios de aceptación`.
-3. **Implementación.** Delega a `engineer` con el plan de la subtarea, los criterios, la ruta de los tests, el contenido de `LESSONS.md` y, si es reintento, los hallazgos del auditor. Rama `feat/T1-nombre`.
+3. **Implementación.** Delega a `engineer` con el plan de la subtarea, los criterios, la ruta de los tests, el contenido de `LESSONS.md` (solo `LESSONS.md`, nunca las pendientes) y, si es reintento, los hallazgos del auditor. Rama `feat/T1-nombre`. El engineer trabaja en un worktree aislado (`isolation: worktree`) y una rama no puede estar activa en dos worktrees. Por eso, antes de delegar, crea y empuja la rama, y no la dejes activa en tu checkout: vuelve a `staging`. Pásale el nombre de la rama en el prompt; él hace `git switch <rama>` en su worktree y commitea ahí. Tú empujas después.
 4. **Evidencia.** El engineer devuelve estado, rama, archivos, resumen de tests y resumen del diff. Guárdalo en `.pipeline/evidencia/T1.md`.
-5. **Auditoría de código.** Delega a `auditor` en modo código con criterios, rama, evidencia y `LESSONS.md`. Guarda su JSON en `.pipeline/veredicto-T1.json`. Si trae `new_lesson`, agrégala a `LESSONS.md`.
-6. **Segundo auditor** (riesgo medio y alto). Corre `/audit-codex T1`. Guarda en `.pipeline/veredicto-codex-T1.json`.
-7. **Router.** Ejecuta:
+5. **Auditoría de código.** Delega a `auditor` en modo código con criterios, rama, evidencia y `LESSONS.md`. Guarda su JSON en `.pipeline/veredicto-T1.json`. Si trae `new_lesson`, agrégala a `.pipeline/lecciones-pendientes.md` con la subtarea y el archivo del veredicto, y el número del PR cuando lo abras. No la agregues a `LESSONS.md` (ver Memoria del sistema).
+6. **Segundo auditor** (riesgo medio y alto, salvo en el proceso ligero de los PRs que solo tocan rutas de gobierno, que no lleva Codex ni JEV). Corre `/audit-codex T1`. Guarda en `.pipeline/veredicto-codex-T1.json`. Si Codex trae `new_lesson`, también va a `.pipeline/lecciones-pendientes.md`.
+7. **Router.** En el proceso ligero no se ejecuta JEV: el PR se abre después de la ronda única, con el veredicto y lo que se corrigió o documentó en el cuerpo, y Leonardo decide al revisar. En los demás casos, ejecuta:
    `python scripts/jev.py --verdict .pipeline/veredicto-T1.json --attempt N --risk <nivel> [--codex .pipeline/veredicto-codex-T1.json] [--previous <veredicto anterior>]`
    Acuerdo: en riesgo medio y alto, Claude y Codex deben coincidir; si no, es HUMAN.
    y obedece la primera línea de la salida:
@@ -77,9 +96,9 @@ Por cada subtarea, en este orden:
 
 ## Fase 4: Integración y deploy
 
-- Los PRs los abre `talos-bot`. PR sin rutas de gobierno: CI en verde y `PASS` → merge a `staging` con `gh pr merge <n> --squash`, siempre con el número del PR (el hook bloquea la forma sin número). PR con rutas de gobierno: lo aprueba y lo mergea Leonardo, también a `staging`; el servidor exige su aprobación como code owner y el hook bloquea tu merge. Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
+- Los PRs los abre `talos-bot-leon`. PR sin rutas de gobierno: CI en verde y `PASS` → merge a `staging` con `gh pr merge <n> --squash`, siempre con el número del PR (el hook bloquea la forma sin número). PR con rutas de gobierno: lo aprueba y lo mergea Leonardo, también a `staging`; el servidor exige su aprobación como code owner y el hook bloquea tu merge. Railway despliega staging por su integración con GitHub; tú no corres `railway up`.
 - Corre `/verificar-deploy staging`. Si falla: PR de revert a `staging` y `HUMAN`.
-- Si staging pasa: abre (como `talos-bot`) el PR de `staging` a `main` con el resumen de todas las subtareas, la evidencia y los veredictos. Leonardo lo aprueba y lo mergea él mismo desde GitHub (web o app); `main` exige una aprobación y la del code owner si hay rutas de gobierno. Tú nunca mergeas ni empujas a `main`; el hook lo bloquea.
+- Si staging pasa: abre (como `talos-bot-leon`) el PR de `staging` a `main` con el resumen de todas las subtareas, la evidencia y los veredictos. Leonardo lo aprueba y lo mergea él mismo desde GitHub (web o app); `main` exige una aprobación y la del code owner si hay rutas de gobierno. Tú nunca mergeas ni empujas a `main`; el hook lo bloquea.
 - Tras el merge a `main`, corre `/verificar-deploy production`. Si falla: abre PR de revert a `main` y `HUMAN`.
 - Reporte final: URLs, veredictos, intentos y tiempo por subtarea.
 
@@ -95,10 +114,10 @@ Por cada subtarea, en este orden:
 
 ## Credenciales
 
-- El token de `talos-bot` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
-- Qué procesos pueden llegar a las credenciales: `gh` y `git` (por el helper `gh auth git-credential`) y cualquier proceso hijo de la sesión, incluido Codex, que hereda `GH_CONFIG_DIR` y podría leer el archivo si lo buscara. El hook bloquea los comandos que nombran tokens o esos archivos, los que imprimen credenciales o variables de entorno y los que cambian de cuenta. `Read`, `Edit` y `Write` están denegados sobre `settings.local.json` y `~/.talos-gh`.
+- El token de `talos-bot-leon` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
+- Qué procesos pueden llegar a las credenciales: `gh` y `git` (por el helper `gh auth git-credential`) y cualquier proceso hijo de la sesión, incluido Codex, que hereda `GH_CONFIG_DIR` y podría leer el archivo si lo buscara. El hook bloquea los comandos que nombran tokens o esos archivos, los que imprimen credenciales o variables de entorno (`git credential fill|approve|reject` incluidos) y los que cambian de cuenta. También bloquea `git credential-manager`, salvo `github list`, porque toca el Credential Manager de Leonardo. `Read`, `Edit` y `Write` están denegados sobre `settings.local.json` y `~/.talos-gh`.
 - La herramienta PowerShell está denegada en `.claude/settings.json`: el agente usa solo Bash, que es donde corren los hooks.
-- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
+- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot-leon` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
 
 ## Prohibido sin excepción
 
@@ -145,7 +164,12 @@ Máximo 8 líneas: subtarea, resultado, intentos, hallazgos relevantes, siguient
 ## Memoria del sistema
 
 - `docs/adr/`: una decisión por archivo. Lee los ADR existentes antes de proponer; no re-discutas lo ya decidido sin decirlo.
-- `LESSONS.md`: una línea por patrón de error. Se incluye en cada delegación al engineer.
+- `LESSONS.md`: una línea por patrón de error. Se incluye en cada delegación al engineer. Una lección entra al prompt del engineer solo cuando ya está en `LESSONS.md`: el engineer nunca recibe las pendientes.
+- `.pipeline/lecciones-pendientes.md`: los `new_lesson` de los auditores, con su fuente. No es ruta de gobierno.
+- **PR de lecciones.** `LESSONS.md` solo cambia con un PR de lecciones: uno solo al cierre de cada proyecto, o cuando haya 5 lecciones pendientes, lo que pase primero.
+  - Lo abre `talos-bot-leon` con las pendientes propuestas, redactadas en el formato de `LESSONS.md`.
+  - Leonardo las edita, descarta o acepta, y lo mergea él (es ruta de gobierno).
+  - Las lecciones mergeadas o descartadas salen de pendientes en el mismo PR.
 - `.pipeline/`: estado operativo (plan, criterios, evidencia, veredictos, modo). Se commitea.
 
 ## Modo no interactivo (Fase 2)
