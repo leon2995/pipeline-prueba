@@ -4,11 +4,17 @@
 # Uso: bash scripts/test-hooks.sh
 set -uo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
+# Configuración del framework (T3a): el dueño, el bot y su email salen de .claude/pipeline.conf
+# (líneas clave=valor), no de valores fijos. Así la suite corre igual en otro repo con otro conf.
+conf() { sed -n "s/^$1=//p" "$repo/.claude/pipeline.conf" 2>/dev/null | tr -d '\r' | head -1; }
+dueno=$(conf dueno)
+bot=$(conf bot)
+bot_email=$(conf bot_email)
 ok=0
 fallos=0
 extra_path=""   # se antepone al PATH del hook; sirve para simular herramientas rotas o un gh falso
 hooks_alt=""    # si no está vacío, se corre el hook de este directorio (copia) en lugar del base
-extra_env=()    # variables de entorno para el hook (por ejemplo la identidad de talos-bot-leon)
+extra_env=()    # variables de entorno para el hook (por ejemplo la identidad del bot)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 # La suite corre sobre una copia de los hooks y de rutas-gobierno.txt, sin identidad-agente.txt:
@@ -37,7 +43,8 @@ caso() {
   # el caso pida en extra_env), para que el resultado no dependa de quién la corre.
   err=$(printf '%s' "$json" | env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 \
     -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_KEY_1 -u GIT_CONFIG_VALUE_1 -u GIT_AUTHOR_NAME \
-    -u GIT_COMMITTER_NAME -u GH_TOKEN -u GITHUB_TOKEN -u FAKE_GH_LOGIN ${extra_env[@]+"${extra_env[@]}"} \
+    -u GIT_COMMITTER_NAME -u GH_TOKEN -u GITHUB_TOKEN -u FAKE_GH_LOGIN -u RAILWAY_TOKEN \
+    -u RAILWAY_API_TOKEN ${extra_env[@]+"${extra_env[@]}"} \
     PATH="$extra_path$PATH" bash "${hooks_alt:-$hooks}/$hook" 2>&1 >/dev/null)
   salio=$?
   if [ "$salio" -eq "$esperado" ] && { [ -z "$motivo" ] || [[ "$err" == *"$motivo"* ]]; }; then
@@ -464,47 +471,105 @@ g permite 'git credential-manager github list 2>&1 | head -3'
 g permite 'git grep -n credential-manager SETUP.md'
 g permite 'git log -S credential-manager --oneline'
 
-echo "== guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso"
+echo "== guard-commands.sh: Railway, solo lecturas (T3a)"
+for c in 'railway --help' 'railway -V' 'railway --version' 'railway help up' 'railway up --help' \
+  'railway status' 'railway status --json' 'railway whoami' 'railway logs' 'railway logs | tail -n 200' \
+  'railway list' 'railway ls' 'railway metrics' 'railway docs' 'railway environment link staging' \
+  'railway environment list' 'railway env ls' 'railway environment config' 'railway environment link production' \
+  'railway service list' 'railway service status' 'railway service logs' 'railway domain list' \
+  'railway domain status x.up.railway.app' 'railway deployment list' 'railway project list' 'railway volume list' \
+  'railway variables --kv | cut -d= -f1' 'railway variable list --kv | cut -d= -f1' 'railway vars --kv | cut -d= -f1' \
+  'railway usage' 'railway usage projects' 'railway api schema' 'railway api search deployment' \
+  'railway api describe Service' 'railway config plan' 'railway config plan --detailed-exit-code' \
+  'railway config migrate' 'railway.exe status' '/usr/local/bin/railway status' 'npx @railway/cli status' \
+  'npx -y @railway/cli logs' 'NO_COLOR=1 railway status' '(railway status)' 'grep -rn railway SETUP.md' \
+  'cat .railway/railway.ts' 'echo railway up' 'ls .railway' \
+  'if railway status; then echo ok; fi' 'for i in 1 2; do railway logs; done' 'timeout 30 railway status' \
+  'railway ssh --help' 'railway run --help' 'railway variable set --help'; do
+  g permite "$c"
+done
+for c in 'railway up' 'railway up --detach' 'railway redeploy' 'railway restart' 'railway down' 'railway deploy -t x' \
+  'railway add --repo o/r' 'railway init --name x' 'railway link' 'railway unlink' 'railway login' 'railway logout' \
+  'railway run npm start' 'railway shell' 'railway ssh' 'railway connect postgres' 'railway domain' \
+  'railway domain --port 8080' 'railway domain delete x.up.railway.app' 'railway environment new staging' \
+  'railway env delete staging' 'railway environment edit' 'railway service redeploy' 'railway service web' \
+  'railway variable set FOO=1' 'railway variables set FOO=1' 'railway var delete FOO' 'railway volume add' \
+  'railway project delete' 'railway delete' 'railway config apply' 'railway config pull' 'railway config init' \
+  'railway config plan --show-values' 'railway config plan --decrypt-variables' 'railway config migrate --apply' \
+  'railway config migrate --delete-files' 'railway usage limit set 50' "railway api 'mutation { x }'" \
+  "railway api 'query { me { id } }'" 'railway mcp' 'railway setup agent -y' 'railway upgrade --yes' \
+  'railway.exe up' '/usr/local/bin/railway up' 'npx @railway/cli up' 'npx -y @railway/cli redeploy' \
+  'NO_COLOR=1 railway up' '(railway up)' 'git status && railway up' 'railway status; railway down' \
+  'railway environment staging' 'railway env production' \
+  'for i in 1 2 3; do railway up --detach && break; sleep 10; done' 'if ! railway up; then echo fallo; fi' \
+  'then railway redeploy' '{ railway down; }' 'while true; do railway restart; done' 'timeout 600 railway up' \
+  'xargs -n 1 railway up' 'nice -n 10 railway up' 'time railway up' 'watch -n 5 railway redeploy' \
+  'railway ssh -- df -h' 'railway ssh free -h' 'railway run -- node x.js --help' 'railway run pytest -V'; do
+  g bloquea "$c" 'Railway'
+done
+g bloquea 'railway variables --kv' 'solo nombres'
+g bloquea 'railway vars --kv' 'solo nombres'
+
+echo "== guard-commands.sh: sesión de Railway de Leonardo (T3a)"
+g bloquea 'cat ~/.railway/config.json' 'credenciales'
+g bloquea 'ls ~/.railway' 'credenciales'
+g bloquea 'cat $HOME/.railway/config.json' 'credenciales'
+g bloquea 'cat ${HOME}/.railway/config.json' 'credenciales'
+g bloquea 'type C:/Users/dev/.railway/config.json' 'credenciales'
+g bloquea 'ls /c/Users/dev/.railway' 'credenciales'
+g bloquea 'grep token .railway/config.json' 'credenciales'
+g bloquea 'echo $RAILWAY_TOKEN' 'credenciales'
+g bloquea 'RAILWAY_API_TOKEN=x railway status' 'credenciales'
+g bloquea 'cat "C:\Users\dev\.railway\config.json"' 'credenciales'
+g bloquea 'ls /home/dev/.railway' 'credenciales'
+g bloquea 'dir %USERPROFILE%\.railway' 'credenciales'
+g bloquea 'ls $USERPROFILE/.railway' 'credenciales'
+g permite 'cat .railway/railway.ts'
+g permite 'ls C:/Users/dev/proyectos/app/.railway'
+g permite 'cat $USERPROFILE/proyectos/app/.railway/railway.ts'
+g permite 'echo $USERPROFILE'
+
+echo "== guard-commands.sh: identidad del bot $bot (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
 variante_identidad() {
   variante "$1"
   cp "$hooks/../rutas-gobierno.txt" "$tmp/reglas/$1/.claude/" 2>/dev/null
   printf '%s\n' "$2" > "$tmp/reglas/$1/.claude/identidad-agente.txt"
 }
-# Identidad completa de talos-bot-leon, igual que la plantilla (sin token: el gh falso responde api user).
+# Identidad completa del bot, igual que la plantilla (sin token: el gh falso responde api user).
 clave_helper='credential.https://github.com.helper'
 talos_git=(GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
   "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
-talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon
-  GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
+talos_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME="$bot"
+  GIT_COMMITTER_NAME="$bot" FAKE_GH_LOGIN="$bot")
 extra_path="$tmp/gh-falso:"
-variante_identidad identidad talos-bot-leon
-echo "-- sin la identidad de talos-bot-leon"
+variante_identidad identidad "$bot"
+echo "-- sin la identidad de $bot"
 extra_env=()
-g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
-g bloquea 'git push -u origin feat/x' 'identidad de talos-bot-leon'
-g bloquea 'gh pr create --title x --body y' 'identidad de talos-bot-leon'
-g bloquea 'gh pr merge 101 --squash' 'identidad de talos-bot-leon'
-g bloquea 'gh pr comment 101 --body x' 'identidad de talos-bot-leon'
-g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' 'identidad de talos-bot-leon'
-g bloquea 'gh api graphql -f query=x' 'identidad de talos-bot-leon'
-g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' 'identidad de talos-bot-leon'
-g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot-leon'
-g bloquea 'gh pr create --title x --body y; gh pr view --help' 'identidad de talos-bot-leon'
-g bloquea 'gh pr new --fill' 'identidad de talos-bot-leon'
-g bloquea 'gh -R leon2995/pipeline-prueba pr create --title x --body y' 'identidad de talos-bot-leon'
-g bloquea 'gh pr -R leon2995/pipeline-prueba edit 5 --title x' 'identidad de talos-bot-leon'
-g bloquea 'gh pr edit 5 --title x' 'identidad de talos-bot-leon'
-g bloquea 'gh pr close 5' 'identidad de talos-bot-leon'
-g bloquea 'gh pr reopen 5' 'identidad de talos-bot-leon'
-g bloquea 'gh pr ready 5' 'identidad de talos-bot-leon'
-g bloquea 'gh pr review 5 --comment -b x' 'identidad de talos-bot-leon'
-g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE' 'identidad de talos-bot-leon'
-g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET' 'identidad de talos-bot-leon'
-g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' 'identidad de talos-bot-leon'
-g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' 'identidad de talos-bot-leon'
-g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' 'identidad de talos-bot-leon'
-g bloquea 'git -C . push -u origin feat/x' 'identidad de talos-bot-leon'
+g bloquea 'git commit -m x' "identidad de $bot"
+g bloquea 'git push -u origin feat/x' "identidad de $bot"
+g bloquea 'gh pr create --title x --body y' "identidad de $bot"
+g bloquea 'gh pr merge 101 --squash' "identidad de $bot"
+g bloquea 'gh pr comment 101 --body x' "identidad de $bot"
+g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body=x' "identidad de $bot"
+g bloquea 'gh api graphql -f query=x' "identidad de $bot"
+g bloquea 'gh api -X PATCH repos/{owner}/{repo}/pulls/5 --input datos.json' "identidad de $bot"
+g bloquea 'gh api --method DELETE repos/{owner}/{repo}/git/refs/heads/x' "identidad de $bot"
+g bloquea 'gh pr create --title x --body y; gh pr view --help' "identidad de $bot"
+g bloquea 'gh pr new --fill' "identidad de $bot"
+g bloquea 'gh -R leon2995/pipeline-prueba pr create --title x --body y' "identidad de $bot"
+g bloquea 'gh pr -R leon2995/pipeline-prueba edit 5 --title x' "identidad de $bot"
+g bloquea 'gh pr edit 5 --title x' "identidad de $bot"
+g bloquea 'gh pr close 5' "identidad de $bot"
+g bloquea 'gh pr reopen 5' "identidad de $bot"
+g bloquea 'gh pr ready 5' "identidad de $bot"
+g bloquea 'gh pr review 5 --comment -b x' "identidad de $bot"
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X GET -X DELETE' "identidad de $bot"
+g bloquea 'gh api repos/{owner}/{repo}/issues/1 -X DELETE -X GET' "identidad de $bot"
+g bloquea 'gh api -X "POST" repos/{owner}/{repo}/issues/5/comments' "identidad de $bot"
+g bloquea 'gh api -X GET repos/{owner}/{repo}/pulls/5; gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/x' "identidad de $bot"
+g bloquea 'gh --repo leon2995/pipeline-prueba api repos/{owner}/{repo}/issues -f title=x' "identidad de $bot"
+g bloquea 'git -C . push -u origin feat/x' "identidad de $bot"
 g permite 'gh api -XGET repos/{owner}/{repo}/pulls/5'
 g permite 'gh api --method=GET repos/{owner}/{repo}/pulls/5'
 g permite 'git status'
@@ -513,9 +578,9 @@ g permite 'gh pr view 101'
 g permite 'gh api repos/{owner}/{repo}/pulls/5'
 g permite 'gh api -X GET repos/{owner}/{repo}/pulls/5'
 g permite 'gh pr merge --help'
-g bloquea 'gh pr create --title "T3: soporte de --help" --body-file b.md' 'identidad de talos-bot-leon'
-g bloquea "gh pr comment 5 --body 'usa -h para ver opciones'" 'identidad de talos-bot-leon'
-echo "-- con la identidad de talos-bot-leon"
+g bloquea 'gh pr create --title "T3: soporte de --help" --body-file b.md' "identidad de $bot"
+g bloquea "gh pr comment 5 --body 'usa -h para ver opciones'" "identidad de $bot"
+echo "-- con la identidad de $bot"
 extra_env=("${talos_env[@]}")
 g permite 'git commit -m x'
 g permite 'git push -u origin feat/x'
@@ -565,15 +630,15 @@ g permite '(cd . && git push)'
 g permite '(git push origin feat/x)'
 g bloquea '(git push git@github.com:o/r.git feat/x)' 'no es HTTPS'
 echo "-- identidad incompleta o de otra cuenta"
-talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=leon2995 GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
-g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=leon2995 FAKE_GH_LOGIN=talos-bot-leon)
-g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
-extra_env=("${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=talos-bot-leon)
-g bloquea 'git push -u origin feat/x' 'identidad de talos-bot-leon'
+talos_base=(GH_CONFIG_DIR=/tmp/talos-gh-prueba GIT_AUTHOR_NAME="$bot" GIT_COMMITTER_NAME="$bot" FAKE_GH_LOGIN="$bot")
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME="$dueno" GIT_COMMITTER_NAME="$bot" FAKE_GH_LOGIN="$bot")
+g bloquea 'git commit -m x' "identidad de $bot"
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME="$bot" GIT_COMMITTER_NAME="$dueno" FAKE_GH_LOGIN="$bot")
+g bloquea 'git commit -m x' "identidad de $bot"
+extra_env=("${talos_git[@]}" GIT_AUTHOR_NAME="$bot" GIT_COMMITTER_NAME="$bot" FAKE_GH_LOGIN="$bot")
+g bloquea 'git push -u origin feat/x' "identidad de $bot"
 extra_env=("${talos_base[@]}")
-g bloquea 'git commit -m x' 'identidad de talos-bot-leon'
+g bloquea 'git commit -m x' "identidad de $bot"
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=manager)
 g bloquea 'git push -u origin feat/x' 'plantilla'
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper" GIT_CONFIG_VALUE_0=
@@ -581,9 +646,9 @@ extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_0=$clave_helper
 g bloquea 'git push -u origin feat/x' 'plantilla'
 extra_env=("${talos_base[@]}" GIT_CONFIG_COUNT=2 "GIT_CONFIG_KEY_1=$clave_helper" 'GIT_CONFIG_VALUE_1=!gh auth git-credential')
 g bloquea 'git push -u origin feat/x' 'plantilla'
-extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME=talos-bot-leon GIT_COMMITTER_NAME=talos-bot-leon FAKE_GH_LOGIN=leon2995)
-g bloquea 'git push -u origin feat/x' 'GitHub responde como leon2995'
-g bloquea 'gh pr create --title x --body y' 'GitHub responde como leon2995'
+extra_env=(GH_CONFIG_DIR=/tmp/talos-gh-prueba "${talos_git[@]}" GIT_AUTHOR_NAME="$bot" GIT_COMMITTER_NAME="$bot" FAKE_GH_LOGIN="$dueno")
+g bloquea 'git push -u origin feat/x' "GitHub responde como $dueno"
+g bloquea 'gh pr create --title x --body y' "GitHub responde como $dueno"
 g permite 'git commit -m x'
 variante_identidad identidad-vacia ''
 extra_env=("${talos_env[@]}")
@@ -591,7 +656,7 @@ g bloquea 'git commit -m x' 'identidad-agente.txt'
 extra_env=()
 hooks_alt=""
 extra_path=""
-echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de talos-bot-leon"
+echo "-- sin identidad-agente.txt (arranque), lo cotidiano pasa sin el entorno de $bot"
 g permite 'git commit -m x'
 g permite 'git push -u origin feat/x'
 
@@ -617,14 +682,14 @@ reglas_a_codeowners() {
   done < "$1"
 }
 # codeowners_patrones <CODEOWNERS>: imprime los patrones; falla si una línea no tiene exactamente
-# el dueño @leon2995.
+# el dueño del conf (@$dueno).
 codeowners_patrones() {
   local l p d resto
   while IFS= read -r l || [ -n "$l" ]; do
     l=$(recortar "$l")
     case "$l" in ''|'#'*) continue ;; esac
     read -r p d resto <<< "$l"
-    { [ "$d" = "@leon2995" ] && [ -z "$resto" ]; } || return 1
+    { [ "$d" = "@$dueno" ] && [ -z "$resto" ]; } || return 1
     printf '%s\n' "$p"
   done < "$1"
 }
@@ -641,13 +706,16 @@ co="$repo/.github/CODEOWNERS"
 v="$tmp/codeowners"
 mkdir -p "$v"
 chequeo pasa 'el CODEOWNERS del repo coincide con rutas-gobierno.txt' comparar_codeowners "$reglas" "$co"
+# El dueño sale de pipeline.conf (T3a): con otro dueño en el conf, el CODEOWNERS del repo no coincide.
+con_otro_dueno() { local dueno=otro-dueno; comparar_codeowners "$@"; }
+chequeo falla 'con otro dueño en pipeline.conf, el CODEOWNERS del repo no coincide' con_otro_dueno "$reglas" "$co"
 grep -v 'CLAUDE.md' "$co" > "$v/falta" 2>/dev/null
 chequeo falla 'CODEOWNERS al que le falta una regla' comparar_codeowners "$reglas" "$v/falta"
-{ cat "$co" 2>/dev/null; echo '/docs/ @leon2995'; } > "$v/sobra"
+{ cat "$co" 2>/dev/null; echo "/docs/ @$dueno"; } > "$v/sobra"
 chequeo falla 'CODEOWNERS con una regla de más' comparar_codeowners "$reglas" "$v/sobra"
-sed 's/@leon2995/@otro/' "$co" > "$v/otro" 2>/dev/null
+sed "s/@$dueno/@otro/" "$co" > "$v/otro" 2>/dev/null
 chequeo falla 'CODEOWNERS con otro dueño' comparar_codeowners "$reglas" "$v/otro"
-sed 's/@leon2995/@leon2995 @otro/' "$co" > "$v/dos" 2>/dev/null
+sed "s/@$dueno/@$dueno @otro/" "$co" > "$v/dos" 2>/dev/null
 chequeo falla 'CODEOWNERS con dos dueños' comparar_codeowners "$reglas" "$v/dos"
 sed 's#^\.claude/#/.claude/#' "$co" > "$v/anclado" 2>/dev/null
 chequeo falla 'CODEOWNERS con .claude/ anclado a la raíz' comparar_codeowners "$reglas" "$v/anclado"
@@ -679,8 +747,20 @@ for regla in 'PowerShell' 'Read(./.claude/settings.local.json)' 'Read(**/.claude
   'Read(~/.talos-gh/**)' 'Edit(~/.talos-gh/**)' 'Write(~/.talos-gh/**)'; do
   chequeo pasa "settings.json deniega $regla" deniega "$regla"
 done
+# Railway (T3a): la sesión de Leonardo y el MCP de Railway quedan fuera del alcance del agente.
+for regla in 'Read(~/.railway/**)' 'Edit(~/.railway/**)' 'Write(~/.railway/**)' 'mcp__railway'; do
+  chequeo pasa "settings.json deniega $regla" deniega "$regla"
+done
+permite_regla() { jq -e --arg r "$1" '.permissions.allow | index($r) != null' "$s"; }
+chequeo falla 'settings.json ya no aprueba solo Bash(railway environment*)' permite_regla 'Bash(railway environment*)'
 tiene_linea() { tr -d '\r' < "$2" | grep -qxF "$1"; }
 chequeo pasa '.gitignore ignora .claude/settings.local.json' tiene_linea '.claude/settings.local.json' "$repo/.gitignore"
+chequeo pasa '.gitignore ignora .claude/worktrees/ (worktrees del engineer)' tiene_linea '.claude/worktrees/' "$repo/.gitignore"
+# pipeline.conf (T3a): define el dueño, el bot y el email del bot que usa la suite.
+chequeo pasa 'pipeline.conf define dueno' test -n "$dueno"
+chequeo pasa 'pipeline.conf define bot' test -n "$bot"
+chequeo pasa 'pipeline.conf define bot_email' test -n "$bot_email"
+chequeo pasa 'el email del bot es el noreply del bot' test "${bot_email#*+}" = "$bot@users.noreply.github.com"
 p="$repo/.claude/settings.local.example.json"
 # jq es obligatorio para estos chequeos: sin jq la suite falla en lugar de saltárselos.
 chequeo pasa 'jq está instalado (requerido por los chequeos de la plantilla)' command -v jq
@@ -694,10 +774,10 @@ if command -v jq >/dev/null 2>&1; then
   chequeo pasa 'la plantilla vacía el helper con GIT_CONFIG_VALUE_0' campo GIT_CONFIG_VALUE_0 ''
   chequeo pasa 'la plantilla fija GIT_CONFIG_KEY_1' campo GIT_CONFIG_KEY_1 'credential.https://github.com.helper'
   chequeo pasa 'la plantilla usa gh como helper en GIT_CONFIG_VALUE_1' campo GIT_CONFIG_VALUE_1 '!gh auth git-credential'
-  chequeo pasa 'la plantilla fija el autor talos-bot-leon' campo GIT_AUTHOR_NAME talos-bot-leon
-  chequeo pasa 'la plantilla fija el committer talos-bot-leon' campo GIT_COMMITTER_NAME talos-bot-leon
-  chequeo pasa 'la plantilla usa el email noreply del autor' campo GIT_AUTHOR_EMAIL '335185800+talos-bot-leon@users.noreply.github.com'
-  chequeo pasa 'la plantilla usa el email noreply del committer' campo GIT_COMMITTER_EMAIL '335185800+talos-bot-leon@users.noreply.github.com'
+  chequeo pasa "la plantilla fija el autor $bot" campo GIT_AUTHOR_NAME "$bot"
+  chequeo pasa "la plantilla fija el committer $bot" campo GIT_COMMITTER_NAME "$bot"
+  chequeo pasa 'la plantilla usa el email noreply del autor' campo GIT_AUTHOR_EMAIL "$bot_email"
+  chequeo pasa 'la plantilla usa el email noreply del committer' campo GIT_COMMITTER_EMAIL "$bot_email"
 fi
 chequeo falla 'la plantilla no trae prefijos de token' grep -qE 'ghp_|gho_|ghu_|ghs_|ghr_|github_pat_' "$p"
 ci="$repo/.github/workflows/ci.yml"
@@ -741,6 +821,9 @@ chequeo pasa 'CLAUDE.md: el proceso ligero exige code owners activo en staging y
 chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$au"
 chequeo pasa 'auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$ac"
 chequeo pasa 'auditor.md: el new_lesson va a lecciones pendientes' tiene_texto '.pipeline/lecciones-pendientes.md' "$au"
+# Flujo del engineer en worktrees (T3a).
+chequeo pasa 'engineer.md: en su worktree hace git switch a la rama de la subtarea' tiene_texto 'git switch <rama>' "$repo/.claude/agents/engineer.md"
+chequeo pasa 'CLAUDE.md: el CTO no deja activa la rama de la subtarea en su checkout' tiene_texto 'no la dejes activa en tu checkout' "$cl"
 
 echo "== readonly-guard.sh (auditor)"
 r() { bash_cmd readonly-guard.sh "$@"; }
@@ -773,6 +856,22 @@ p bloquea 'C:\Users\dev\repo\docs\adr\0001-stack.md'
 p bloquea 'C:\Users\dev\repo\.github\workflows\ci.yml'
 p permite 'C:\Users\dev\repo\src\app.py'
 p permite 'C:\Users\dev\repo\tests\unit\test_app.py'
+# El engineer corre en un worktree aislado (isolation: worktree), en <repo>/.claude/worktrees/<n>/:
+# la ruta se mide desde la raíz del worktree (T3a).
+p permite 'C:\Users\dev\repo\.claude\worktrees\agent-a1\src\app.py'
+p permite 'C:\Users\dev\repo\.claude\worktrees\agent-a1\tests\unit\test_app.py'
+p permite '/home/dev/repo/.claude/worktrees/agent-a1/src/app.py'
+p permite '/home/dev/repo/.claude/worktrees/agent-a1/instalador/instalar.sh'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\tests\acceptance\test_c1.py'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\.claude\hooks\guard-commands.sh'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\.claude\settings.json'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\CLAUDE.md'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\LESSONS.md'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\docs\adr\0001-stack.md'
+p bloquea 'C:\Users\dev\repo\.claude\worktrees\agent-a1\.github\workflows\ci.yml'
+p bloquea '/home/dev/repo/.claude/worktrees/agent-a1/../../hooks/guard-commands.sh'
+p bloquea '/home/dev/repo/.claude/worktrees/agent-a1/src/../../../settings.json'
+p bloquea '/home/dev/repo/.claude/worktrees/'
 # \r final: jq nativo de Windows entrega la ruta con CRLF.
 caso protect-acceptance-tests.sh bloquea '{"tool_name":"Write","tool_input":{"file_path":"C:\\Users\\dev\\repo\\CLAUDE.md\r"}}' 'C:\Users\dev\repo\CLAUDE.md + \r final'
 

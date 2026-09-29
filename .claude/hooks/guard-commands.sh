@@ -66,6 +66,14 @@ sin_plantilla=${cmd//settings.local.example/}
 if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|oauth_token|settings\.local|\.talos-gh|hosts\.yml'; then
   bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, oauth_token, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
 fi
+# Sesión de Railway de Leonardo (T3a): ~/.railway/config.json guarda su token de la CLI, y
+# RAILWAY_TOKEN o RAILWAY_API_TOKEN serían tokens de proyecto o de cuenta. El .railway/ del repo
+# (railway.ts de IaC) sí se puede leer.
+# Se revisa una copia con las barras invertidas pasadas a / (C:\Users\x\.railway\config.json).
+sesion_rw=${cmd//\\//}
+if printf '%s' "$sesion_rw" | grep -Eq 'RAILWAY_(API_)?TOKEN|~/\.railway|\$\{?HOME\}?/\.railway|/(Users|home)/[^/ ]+/\.railway|\.railway/config\.json|USERPROFILE%?\}?/\.railway'; then
+  bloqueo credenciales "el comando nombra la sesión o un token de Railway (~/.railway, .railway/config.json, RAILWAY_TOKEN, RAILWAY_API_TOKEN). Nómbralos en texto, nunca en un comando."
+fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[:alnum:]_-]|\$)|${I}gh$F +auth$F +status[^;&|]*( -[a-z]*t[a-z]*( |\$)| --show-token)|${I}git( +[^ ;&|]+)* +credential +(fill|approve|reject)"; then
   bloqueo credenciales "el comando imprime una credencial (gh auth token, gh auth status -t, gh auth git-credential, git credential fill)."
 fi
@@ -114,7 +122,7 @@ env_imprime() {
   return 0
 }
 # env_vacia <segmento>: env con -i, --ignore-environment o - entre sus propias opciones (antes del
-# comando que corre): vacía el entorno y con él la identidad de talos-bot-leon. Un -i del comando que env
+# comando que corre): vacía el entorno y con él la identidad del agente. Un -i del comando que env
 # corre (env LC_ALL=C sed -i ...) no cuenta.
 env_vacia() {
   local t salta=0
@@ -139,10 +147,10 @@ while IFS= read -r seg; do
   seg="${seg%"${seg##*[![:space:]]}"}"
   seg=${seg#\(}
   env_imprime "$seg" && bloqueo credenciales "el comando imprime variables de entorno ($seg)."
-  env_vacia "$seg" && bloqueo identidad "el comando vacía el entorno (env -i) y con él la identidad de talos-bot-leon."
+  env_vacia "$seg" && bloqueo identidad "el comando vacía el entorno (env -i) y con él la identidad del agente."
 done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
 if printf '%s\n' "$cmd" | grep -Eq "GH_CONFIG_DIR|GIT_CONFIG_|${I}gh$F +auth$F +(login|logout|switch|refresh|setup-git)([^[:alnum:]_-]|\$)|${I}git( +[^;&|]*)? +(-c +[^;&|]*credential|config [^;&|]*credential)"; then
-  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad de talos-bot-leon sale de .claude/settings.local.json."
+  bloqueo identidad "el comando cambiaría la cuenta de GitHub del agente (gh auth login/switch/logout/refresh/setup-git, GH_CONFIG_DIR, GIT_CONFIG_*, credential.helper). La identidad del agente sale de .claude/settings.local.json."
 fi
 if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +pr$F +review[^;&|]*( --approve| -[A-Za-z]*a[A-Za-z]*( |\$))"; then
   bloqueo aprobación "el agente nunca aprueba PRs; la aprobación de code owner es de Leonardo."
@@ -243,12 +251,6 @@ deny_patterns=(
   'git reset --hard'
   'git clean -f'
   'rm -rf'
-  'railway up'
-  'railway redeploy'
-  'railway variables (set|delete)'
-  'railway (delete|down)'
-  'railway environment delete'
-  'railway service delete'
   'DROP (TABLE|DATABASE|SCHEMA)'
   'TRUNCATE'
   'cat .*\.env'
@@ -262,11 +264,114 @@ for p in "${deny_patterns[@]}"; do
   fi
 done
 
-# railway variables: solo nombres, nunca valores
-if printf '%s' "$cmd" | grep -Eq '^railway variables' && ! printf '%s' "$cmd" | grep -Eq "cut -d= -f1|jq (-r )?'keys'"; then
-  echo "Bloqueado: 'railway variables' solo se permite listando nombres, por ejemplo: railway variables --kv | cut -d= -f1" >&2
-  exit 2
-fi
+# Railway (T3a): el agente solo corre lecturas. Todo comando de railway que escriba (deploys,
+# servicios, ambientes, dominios, variables, config apply, login) lo corre Leonardo en su terminal
+# (CLAUDE.md: OK explícito para cualquier railway que no sea de lectura). Lista de permitidos, no de
+# prohibidos: la CLI suma subcomandos casi cada semana. Un segmento invoca railway si su primera
+# palabra es railway, una ruta a railway o railway.exe, o npx con @railway/cli. Antes se saltan "(",
+# las palabras clave de shell (if, then, else, elif, do, while, until, !, {), VAR=valor, sudo, env,
+# command, exec, builtin y nohup, y los envoltorios con sus opciones y su número o duración (time,
+# timeout, xargs, watch, nice, ionice, stdbuf, winpty). Un "railway" como argumento (grep, echo, cat
+# .railway/railway.ts) no cuenta. Límites (fuera del modelo de amenaza): bash -c "railway up",
+# env -u X railway up, sudo -u x railway up, variables y alias.
+# railway_args <segmento>: 0 si el segmento invoca railway; deja sus argumentos en rw_args.
+railway_args() {
+  local t primero=1 npx=0 envoltorio=0
+  rw_args=()
+  set -f
+  # shellcheck disable=SC2086
+  set -- $1
+  set +f
+  while [ $# -gt 0 ]; do
+    t=${1#\(}
+    shift
+    if [ "$primero" = 1 ]; then
+      case "$t" in
+        '') continue ;;
+        if|then|else|elif|do|while|until|'!'|'{') continue ;;
+        *=*|sudo|env|command|exec|builtin|nohup) continue ;;
+        time|timeout|xargs|watch|nice|ionice|stdbuf|winpty) envoltorio=1; continue ;;
+        npx|pnpx|bunx) npx=1; continue ;;
+        -*) { [ "$npx" = 1 ] || [ "$envoltorio" = 1 ]; } && continue; return 1 ;;
+        railway|*/railway|railway.exe|*/railway.exe|*\\railway.exe) primero=0; continue ;;
+        @railway/cli|@railway/cli@*) [ "$npx" = 1 ] && { primero=0; continue; }; return 1 ;;
+        *)
+          # El número o la duración de un envoltorio (timeout 600, nice -n 10, xargs -n 1).
+          if [ "$envoltorio" = 1 ] && [ "${t#[0-9]}" != "$t" ] && [ -z "${t//[0-9.smhd]/}" ]; then continue; fi
+          return 1 ;;
+      esac
+    fi
+    rw_args+=("${t%)}")
+  done
+  [ "$primero" = 0 ]
+}
+# railway_lectura: 0 si rw_args es una lectura. El subcomando y el sub-subcomando son las dos
+# primeras palabras que no empiezan con -, antes de "--".
+# La ayuda (--help, -h, --version, -V) no ejecuta nada. Cuenta antes de "--" y dentro de las dos
+# primeras palabras. En run, local, ssh, shell, connect, dev y code, lo que sigue al subcomando es
+# del comando hijo (railway ssh -- df -h, railway ssh free -h): ahí solo cuenta justo después.
+railway_lectura() {
+  local a sub="" sub2="" pos=0 i=0 isub=0 hijo=0
+  for a in ${rw_args[@]+"${rw_args[@]}"}; do
+    i=$((i + 1))
+    [ "$a" = -- ] && break
+    case "$a" in
+      --help|-h|--version|-V)
+        if [ "$hijo" = 1 ]; then
+          [ "$i" -eq $((isub + 1)) ] && return 0
+        elif [ "$pos" -le 2 ]; then
+          return 0
+        fi ;;
+      -*) ;;
+      *)
+        pos=$((pos + 1))
+        if [ "$pos" = 1 ]; then
+          isub=$i
+          case "$a" in run|local|ssh|shell|connect|dev|develop|code) hijo=1 ;; esac
+        fi ;;
+    esac
+  done
+  for a in ${rw_args[@]+"${rw_args[@]}"}; do
+    [ "$a" = -- ] && break
+    case "$a" in -*) continue ;; esac
+    if [ -z "$sub" ]; then sub=$a; else sub2=$a; break; fi
+  done
+  case "$sub" in
+    ""|help|status|whoami|logs|list|ls|metrics|docs) return 0 ;;
+    environment|env) case "$sub2" in link|list|ls|config|show|info) return 0 ;; esac ;;
+    service) case "$sub2" in list|ls|status|logs) return 0 ;; esac ;;
+    domain) case "$sub2" in list|ls|status) return 0 ;; esac ;;
+    deployment|deployments|project|projects|volume|volumes) case "$sub2" in list|ls) return 0 ;; esac ;;
+    variable|variables|vars|var) case "$sub2" in ""|list|ls) return 0 ;; esac ;;
+    usage) case "$sub2" in ""|projects) return 0 ;; esac ;;
+    api) case "$sub2" in schema|search|describe) return 0 ;; esac ;;
+    config)
+      case "$sub2" in
+        plan) printf ' %s ' "${rw_args[*]}" | grep -Eq ' --(show-values|decrypt-variables)(=| )' || return 0 ;;
+        migrate) printf ' %s ' "${rw_args[*]}" | grep -Eq ' --(apply|delete-files)(=| )' || return 0 ;;
+      esac ;;
+  esac
+  return 1
+}
+while IFS= read -r seg; do
+  railway_args "$seg" || continue
+  railway_lectura ||
+    bloqueo Railway "el agente solo corre lecturas de railway (status, logs, list, environment link <nombre>, variables con solo nombres, config plan, --help). Este comando escribe o no está en la lista: lo corre Leonardo en su terminal."
+  # Variables: solo nombres, nunca valores (salvo la ayuda).
+  primer="" ayuda=0
+  for a in ${rw_args[@]+"${rw_args[@]}"}; do
+    case "$a" in
+      --help|-h) ayuda=1 ;;
+      -*) ;;
+      *) [ -z "$primer" ] && primer=$a ;;
+    esac
+  done
+  case "$primer" in
+    variable|variables|vars|var)
+      [ "$ayuda" = 1 ] || printf '%s' "$cmd" | grep -Eq "cut -d= -f1|jq (-r )?'keys'" ||
+        bloqueo Railway "railway variables solo nombres: lista con railway variables --kv | cut -d= -f1." ;;
+  esac
+done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
 # Identidad de talos-bot-leon (C4 de cuenta-agente). Se activa cuando existe .claude/identidad-agente.txt
 # con el login esperado: desde ahí, sin la identidad de talos-bot-leon se bloquean commits, push y
 # escrituras en GitHub en lugar de volver en silencio a la cuenta de Leonardo. Sin el archivo no se
@@ -309,7 +414,7 @@ if [ -e "$archivo_identidad" ]; then
   done <<< "$(printf '%s\n' "$cmd" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g' | tr ';&|' '\n\n\n')"
   if [ "$escribe_git" = 1 ] || [ "$escribe_gh" = 1 ]; then
     esperado=$(tr -d '[:space:]' < "$archivo_identidad" 2>/dev/null)
-    falta="falta la identidad de talos-bot-leon (.claude/settings.local.json)"
+    falta="falta la identidad de ${esperado:-la cuenta del agente} (.claude/settings.local.json)"
     [ -n "$esperado" ] || bloqueo identidad "$falta: .claude/identidad-agente.txt está vacío o no se puede leer."
     { [ -n "${GH_CONFIG_DIR:-}" ] && [ -n "${GIT_CONFIG_COUNT:-}" ]; } ||
       bloqueo identidad "$falta: GH_CONFIG_DIR o GIT_CONFIG_COUNT no están definidas en la sesión."
