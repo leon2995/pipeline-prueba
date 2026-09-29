@@ -71,14 +71,19 @@ if printf '%s\n' "$cmd" | grep -Eq "${I}gh$F +auth$F +(token|git-credential)([^[
 fi
 # git credential-manager (lecciones, T2): login, logout, get, store, erase o configure tocan el
 # Credential Manager de Leonardo, donde vive su credencial de git. El agente solo puede listar las
-# cuentas (git credential-manager github list). También git-credential-manager y .exe, y con opciones
-# globales de git antes. Límite: el texto "git credential-manager" dentro de un --title o un -m
-# también cuenta; usa --body-file y -F.
-gcm="${I}(git( +[^ ;&|]+)* +credential-manager|git-credential-manager)(\\.exe)?([^[:alnum:]_.-]|\$)"
+# cuentas (git credential-manager github list). Cubre git credential-manager con opciones globales de
+# git antes (-C dir, -c k=v, como $F; git grep credential-manager no cuenta), git-credential-manager
+# con ruta completa, y los sufijos -core y .exe. En cada segmento se quita un comentario (# precedido
+# de espacio), y solo pasa si hay una sola invocación y va seguida de github list.
+# Límites: el texto "git credential-manager" dentro de un --title o un -m también cuenta (usa
+# --body-file y -F); powershell.exe -Command "..." y $(...) no se ven (fuera del modelo de amenaza).
+gcm="(${I}git$F +credential-manager|(${I}|[/\\\\])git-credential-manager)(-core)?(\\.exe)?([^[:alnum:]_.-]|\$)"
 if printf '%s\n' "$cmd" | grep -Eq "$gcm"; then
   while IFS= read -r seg; do
-    printf '%s\n' " $seg " | grep -Eq "$gcm" || continue
-    printf '%s\n' " $seg " | grep -Eq "credential-manager(\\.exe)? +github +list( [^;&|]*)?\$" ||
+    s=" ${seg%%[[:space:]]#*} "
+    printf '%s\n' "$s" | grep -Eq "$gcm" || continue
+    n=$(printf '%s\n' "$s" | grep -Eo 'credential-manager' | wc -l)
+    { [ $((n)) -eq 1 ] && printf '%s\n' "$s" | grep -Eq "credential-manager(-core)?(\\.exe)? +github +list( [^;&|]*)?\$"; } ||
       bloqueo credenciales "git credential-manager toca el Credential Manager de Leonardo; el agente solo puede correr git credential-manager github list."
   done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
 fi

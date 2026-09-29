@@ -30,7 +30,8 @@ Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo 
   - antes de aplicar la regla, que `gh api repos/<dueño>/<repo>/branches/<rama>` dé `protected: true` en `staging` y en `main`;
   - al abrir el PR, que con los checks en verde quede `mergeable_state: blocked` y con el code owner en `requested_reviewers`.
 
-  Si alguna falla, trátalo como protección inactiva.
+  Si alguna falla, trátalo como protección inactiva. Si `mergeable_state` responde `unknown`, reintenta en unos segundos: GitHub lo calcula de forma perezosa. Estos chequeos prueban que hay protección y que el PR no entra sin revisión, pero no que la revisión sea del code owner, porque GitHub pide la revisión del code owner con solo que exista `CODEOWNERS`. Esa garantía depende del GET de Leonardo.
+- Aplica en cualquier nivel de riesgo, por decisión de Leonardo. No lleva auditoría del plan (paso 1), ni Codex (paso 6), ni JEV (paso 7): la aprobación de Leonardo como code owner es el control efectivo.
 - Los archivos de `.pipeline/` (estado operativo) no cuentan como ruta fuera de gobierno.
 - Es una sola ronda: los hallazgos se corrigen o se documentan en el PR, y Leonardo decide al revisar.
 - Si la protección no está activa, va el protocolo completo de la Fase 3.
@@ -46,6 +47,8 @@ Asigna nivel de riesgo. Es obligatorio y se escribe en el plan:
 - **bajo**: cambios internos sin datos ni integraciones. Automático hasta staging; producción con OK de Leonardo.
 - **medio**: toca API pública, base de datos sin migración, dependencias nuevas. Como bajo, más `/audit-codex` obligatorio.
 - **alto**: auth, pagos, datos personales, migraciones, integraciones externas, borrado de datos. Plan con OK de Leonardo, doble auditor (Claude y Codex), producción con OK.
+
+Los PRs que solo tocan rutas de gobierno van con el proceso ligero en cualquier nivel (ver arriba), sin `/audit-codex` ni doble auditor. El plan de riesgo alto sigue necesitando el OK de Leonardo.
 
 Si dudas del nivel, sube uno.
 
@@ -76,13 +79,13 @@ Divide el trabajo en subtareas secuenciales del tamaño de un PR (menos de 400 l
 
 Por cada subtarea, en este orden:
 
-1. **Auditoría del plan** (riesgo medio y alto). Delega a `auditor` en modo plan con el plan y los criterios de la subtarea. Si devuelve `fail`, corrige el plan y repite. Máximo 2 vueltas; a la tercera, escala a Leonardo.
+1. **Auditoría del plan** (riesgo medio y alto; no aplica en el proceso ligero). Delega a `auditor` en modo plan con el plan y los criterios de la subtarea. Si devuelve `fail`, corrige el plan y repite. Máximo 2 vueltas; a la tercera, escala a Leonardo.
 2. **Tests de aceptación.** Delega a `test-writer` con los criterios y las interfaces. Escribe tests en `tests/acceptance/` que fallen ahora. Commit aparte: `test(T1): criterios de aceptación`.
 3. **Implementación.** Delega a `engineer` con el plan de la subtarea, los criterios, la ruta de los tests, el contenido de `LESSONS.md` (solo `LESSONS.md`, nunca las pendientes) y, si es reintento, los hallazgos del auditor. Rama `feat/T1-nombre`.
 4. **Evidencia.** El engineer devuelve estado, rama, archivos, resumen de tests y resumen del diff. Guárdalo en `.pipeline/evidencia/T1.md`.
-5. **Auditoría de código.** Delega a `auditor` en modo código con criterios, rama, evidencia y `LESSONS.md`. Guarda su JSON en `.pipeline/veredicto-T1.json`. Si trae `new_lesson`, agrégala a `.pipeline/lecciones-pendientes.md` con la subtarea, el PR y el archivo del veredicto; no la agregues a `LESSONS.md` (ver Memoria del sistema).
-6. **Segundo auditor** (riesgo medio y alto, salvo en el proceso ligero de los PRs que solo tocan rutas de gobierno, que no lleva Codex ni JEV). Corre `/audit-codex T1`. Guarda en `.pipeline/veredicto-codex-T1.json`.
-7. **Router.** Ejecuta:
+5. **Auditoría de código.** Delega a `auditor` en modo código con criterios, rama, evidencia y `LESSONS.md`. Guarda su JSON en `.pipeline/veredicto-T1.json`. Si trae `new_lesson`, agrégala a `.pipeline/lecciones-pendientes.md` con la subtarea y el archivo del veredicto, y el número del PR cuando lo abras. No la agregues a `LESSONS.md` (ver Memoria del sistema).
+6. **Segundo auditor** (riesgo medio y alto, salvo en el proceso ligero de los PRs que solo tocan rutas de gobierno, que no lleva Codex ni JEV). Corre `/audit-codex T1`. Guarda en `.pipeline/veredicto-codex-T1.json`. Si Codex trae `new_lesson`, también va a `.pipeline/lecciones-pendientes.md`.
+7. **Router.** En el proceso ligero no se ejecuta JEV: el PR se abre después de la ronda única, con el veredicto y lo que se corrigió o documentó en el cuerpo, y Leonardo decide al revisar. En los demás casos, ejecuta:
    `python scripts/jev.py --verdict .pipeline/veredicto-T1.json --attempt N --risk <nivel> [--codex .pipeline/veredicto-codex-T1.json] [--previous <veredicto anterior>]`
    Acuerdo: en riesgo medio y alto, Claude y Codex deben coincidir; si no, es HUMAN.
    y obedece la primera línea de la salida:

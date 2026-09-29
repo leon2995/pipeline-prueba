@@ -7,7 +7,7 @@ Aquí van los `new_lesson` de los auditores (Claude y Codex), textuales y con su
 - Leonardo las edita, las descarta o las acepta, y lo mergea.
 - En el mismo PR salen de aquí las que se mergearon o descartaron.
 
-Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archivo del veredicto)`.
+Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archivo del veredicto)`. El texto del patrón es el del auditor. Si el original no trae el prefijo `[fecha] [subtarea]`, lo agrega el CTO; por ejemplo, la segunda lección del PR #4.
 
 Quedan fuera las lecciones de los PRs #1 y #2 (hook-force-push y audit-codex-stdin): Leonardo decidió dejar en `LESSONS.md` solo las dos lecciones generales de esa época, y no llevar la de las citas.
 
@@ -36,3 +36,4 @@ Quedan fuera las lecciones de los PRs #1 y #2 (hook-force-push y audit-codex-std
 - [2026-09-28] [remoto-git-push] tokenizar shell: al partir segmentos con xargs o set --, los delimitadores de subshell '(' y ')' quedan pegados a los tokens; normalízalos antes de comparar subcomandos, y prueba cada rama nueva de una máquina de estados con al menos un caso que deba pasar. (PR #10, `veredicto-remoto-git-push.json`)
 - [2026-09-28] [vencimiento-token] docs de dos cuentas: cada comando gh o git que se refiere a la cuenta del agente, incluidas las menciones en prosa, debe llevar completo el prefijo de configuración del bot; sin él se ejecuta con la cuenta humana. (PR #11, `veredicto-vencimiento-token-intento1.json`)
 - [2026-09-28] [vencimiento-token] docs que afirman un control: si un documento dice que un hook bloquea un comando, verificarlo contra el regex del hook antes de escribirlo; si no, el documento promete una protección que no existe. (PR #11, `veredicto-vencimiento-token.json`)
+- [2026-09-28] [lecciones] protocolo con excepciones: al agregar una excepción a un paso (sin Codex, sin JEV), actualizar todas las compuertas que imponen ese paso (niveles de riesgo en Fase 0, router, auditoría del plan) y no solo el párrafo nuevo y el paso más cercano; si no, quedan dos reglas contradictorias sin precedencia. (PR de T2, `veredicto-lecciones.json`)

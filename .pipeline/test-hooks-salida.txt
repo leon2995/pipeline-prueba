@@ -235,6 +235,12 @@ ok     bloquea  git-credential-manager github logout x
 ok     bloquea  git-credential-manager.exe github logout x
 ok     bloquea  git -C . credential-manager github logout x
 ok     bloquea  git credential-manager github list; git credential-manager github logout x
+ok     bloquea  git credential-manager github list && git credential-manager github logout x
+ok     bloquea  git credential-manager github logout x # git credential-manager github list
+ok     bloquea  git credential-manager-core erase
+ok     bloquea  git-credential-manager-core github logout x
+ok     bloquea  /mingw64/bin/git-credential-manager.exe github logout x
+ok     bloquea  git -c core.x=y credential-manager erase
 ok     bloquea  env
 ok     bloquea  ls && env
 ok     bloquea  env | sort
@@ -291,6 +297,9 @@ ok     permite  env LC_ALL=C sed -i s/a/b/ f
 ok     permite  env LANG=C sort -
 ok     permite  git credential-manager github list
 ok     permite  git credential-manager github list --url https://github.com
+ok     permite  git credential-manager github list 2>&1 | head -3
+ok     permite  git grep -n credential-manager SETUP.md
+ok     permite  git log -S credential-manager --oneline
 == guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso
 -- identidad
 -- sin la identidad de talos-bot-leon
@@ -441,7 +450,12 @@ ok     pasa     existe .pipeline/lecciones-pendientes.md
 ok     falla    .pipeline/ no es ruta de gobierno
 ok     pasa     CLAUDE.md: el new_lesson va a lecciones pendientes
 ok     pasa     CLAUDE.md: un PR de lecciones al cierre del proyecto o con 5 pendientes
-ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (Fase 3, paso 3)
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (tabla de roles)
+ok     pasa     CLAUDE.md: el engineer nunca recibe las pendientes (Memoria del sistema)
+ok     pasa     CLAUDE.md: el new_lesson de Codex también va a pendientes
+ok     pasa     CLAUDE.md: el router dice que el proceso ligero no ejecuta JEV
+ok     pasa     SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager
 ok     pasa     CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno
 ok     pasa     CLAUDE.md: el proceso ligero exige code owners activo en staging y main
 ok     pasa     auditor.md: evasiones fuera del modelo de amenaza con severidad baja
@@ -498,4 +512,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-455 ok, 0 fallos
+469 ok, 0 fallos

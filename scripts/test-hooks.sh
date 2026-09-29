@@ -393,6 +393,14 @@ g bloquea 'git-credential-manager github logout x' 'credenciales'
 g bloquea 'git-credential-manager.exe github logout x' 'credenciales'
 g bloquea 'git -C . credential-manager github logout x' 'credenciales'
 g bloquea 'git credential-manager github list; git credential-manager github logout x' 'credenciales'
+# Después de la ronda del auditor: && entre invocaciones, un comentario que cuela github list, -core,
+# ruta completa y -c antes del subcomando.
+g bloquea 'git credential-manager github list && git credential-manager github logout x' 'credenciales'
+g bloquea 'git credential-manager github logout x # git credential-manager github list' 'credenciales'
+g bloquea 'git credential-manager-core erase' 'credenciales'
+g bloquea 'git-credential-manager-core github logout x' 'credenciales'
+g bloquea '/mingw64/bin/git-credential-manager.exe github logout x' 'credenciales'
+g bloquea 'git -c core.x=y credential-manager erase' 'credenciales'
 g bloquea 'env' 'credenciales'
 g bloquea 'ls && env' 'credenciales'
 g bloquea 'env | sort' 'credenciales'
@@ -452,6 +460,9 @@ g permite 'env LC_ALL=C sed -i s/a/b/ f'
 g permite 'env LANG=C sort -'
 g permite 'git credential-manager github list'
 g permite 'git credential-manager github list --url https://github.com'
+g permite 'git credential-manager github list 2>&1 | head -3'
+g permite 'git grep -n credential-manager SETUP.md'
+g permite 'git log -S credential-manager --oneline'
 
 echo "== guard-commands.sh: identidad de talos-bot-leon (C4), con copia del hook y gh falso"
 # variante_identidad <nombre> <contenido>: copia del hook con .claude/identidad-agente.txt.
@@ -719,7 +730,12 @@ chequeo pasa 'existe .pipeline/lecciones-pendientes.md' test -f "$repo/.pipeline
 chequeo falla '.pipeline/ no es ruta de gobierno' grep -Eq '^(\*\*/)?\.pipeline' "$repo/.claude/rutas-gobierno.txt"
 chequeo pasa 'CLAUDE.md: el new_lesson va a lecciones pendientes' tiene_texto 'agrégala a `.pipeline/lecciones-pendientes.md`' "$cl"
 chequeo pasa 'CLAUDE.md: un PR de lecciones al cierre del proyecto o con 5 pendientes' tiene_texto 'cuando haya 5 lecciones pendientes' "$cl"
-chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes' tiene_texto 'nunca las pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (Fase 3, paso 3)' tiene_texto 'solo `LESSONS.md`, nunca las pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (tabla de roles)' tiene_texto 'LESSONS.md (nunca las lecciones pendientes)' "$cl"
+chequeo pasa 'CLAUDE.md: el engineer nunca recibe las pendientes (Memoria del sistema)' tiene_texto 'el engineer nunca recibe las pendientes' "$cl"
+chequeo pasa 'CLAUDE.md: el new_lesson de Codex también va a pendientes' tiene_texto 'Si Codex trae `new_lesson`, también va a `.pipeline/lecciones-pendientes.md`' "$cl"
+chequeo pasa 'CLAUDE.md: el router dice que el proceso ligero no ejecuta JEV' tiene_texto 'En el proceso ligero no se ejecuta JEV' "$cl"
+chequeo pasa 'SETUP.md: el remedio del paso c dice que el hook bloquea git credential-manager' tiene_texto 'y `git credential-manager`, salvo `github list`' "$repo/SETUP.md"
 chequeo pasa 'CLAUDE.md: proceso ligero para PRs que solo tocan rutas de gobierno' tiene_texto 'una ronda del auditor Claude y la aprobación de Leonardo como code owner' "$cl"
 chequeo pasa 'CLAUDE.md: el proceso ligero exige code owners activo en staging y main' tiene_texto 'protección con code owners esté activa en `staging` y `main`' "$cl"
 chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$au"

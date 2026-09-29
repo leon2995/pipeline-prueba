@@ -1,6 +1,21 @@
 # Evidencia: lecciones (T2)
 
-- **Estado:** listo para la ronda del auditor Claude. Proceso ligero, excepción aprobada por Leonardo: una ronda, sin Codex ni JEV.
+- **Estado:** auditado. Proceso ligero, excepción aprobada por Leonardo: una sola ronda del auditor Claude, sin Codex ni JEV.
+  - **Veredicto:** `pass`, con 1 media y 6 bajas, en `.pipeline/veredicto-lecciones.json`.
+  - **Media:** la excepción no estaba en todas las compuertas. Se corrigió: Fase 0 (medio y alto), paso 1 (auditoría del plan), paso 7 (router), y "aplica en cualquier nivel de riesgo, por decisión de Leonardo".
+  - **Bajas corregidas:**
+    - el patrón `gcm` solo admite opciones globales de git (`$F`), así que `git grep credential-manager` y `git log -S credential-manager` pasan;
+    - se quita el comentario del segmento y se exige una sola invocación, de modo que un `# ... github list` ya no cuela un logout;
+    - `-core` y la ruta completa de `git-credential-manager` se bloquean;
+    - `CLAUDE.md` dice qué prueban los chequeos del bot sobre la protección (no la revisión del code owner en sí) y que `unknown` se reintenta;
+    - hay chequeos de texto para los tres lugares de "nunca las pendientes", para `SETUP.md`, para el `new_lesson` de Codex y para el router;
+    - el `new_lesson` de Codex va a pendientes (paso 6);
+    - el número del PR se anota al abrirlo (paso 5);
+    - el encabezado de pendientes explica el prefijo que agrega el CTO.
+  - **Documentado, fuera del modelo de amenaza:** `powershell.exe -Command "..."` y `$(...)`.
+  - **Corrección antes de la ronda** (`da8ed5a`): el GET de protección da 404 con la cuenta del bot, que no es admin. La verificación del CTO pasó a `protected: true` más el estado del PR.
+  - El `new_lesson` de la ronda se agregó a pendientes, que ahora tiene 16.
+  - Los cambios posteriores a la ronda no se volvieron a auditar, porque el proceso ligero es de una ronda. Los revisa Leonardo como code owner.
 - **Rama:** `feat/T2-lecciones`, desde `staging` en `713de65` (con el #12). Con `identidad-agente.txt` activo, el push de la rama pasó como `talos-bot-leon`: fue la verificación final del paso g.
 - **Implementó:** el CTO, pruebas e implementación, por la regla de rutas de gobierno. Commits como `talos-bot-leon`.
 - **Riesgo:** medio.
@@ -32,7 +47,7 @@
 ## Tests
 
 - **Comando:** `bash scripts/test-hooks.sh`.
-- **Resultado:** `455 ok, 0 fallos` (Git Bash, gawk). Salida completa en `.pipeline/test-hooks-salida.txt`.
+- **Resultado:** `469 ok, 0 fallos` (Git Bash, gawk), después de las correcciones de la ronda. Antes eran `455 ok`. Salida completa en `.pipeline/test-hooks-salida.txt`.
 - **Mutación contra `staging`:** la suite de la rama contra los hooks, las reglas, los settings, el CI, la plantilla, `CLAUDE.md` y los prompts de auditor de `staging`. Resultado: `435 ok, 20 fallos`, exit 1.
   - Fallan los 11 bloqueos nuevos de `git credential-manager` y los 9 chequeos de protocolo.
   - Los otros casos nuevos ya se cumplían en `staging`: las variantes de `fill|approve|reject`, los dos `github list` permitidos y `.pipeline/` fuera de gobierno.
