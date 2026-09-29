@@ -1,6 +1,11 @@
 # Evidencia: instalable
 
-- **Estado:** listo para la ronda del auditor Claude. Proceso ligero: una sola ronda, sin Codex ni JEV.
+- **Estado:** auditado. Proceso ligero, una sola ronda del auditor Claude. Veredicto `pass` con 3 bajas, en `.pipeline/veredicto-instalable.json`.
+  - **Corregido después de la ronda:**
+    - el chequeo del `timeout` queda acotado al frontmatter y a la misma sangría que el `command:` de `run-tests.sh`. Pasa con el `engineer.md` actual y falla con el de `staging`, con un `timeout` mal ubicado y con uno solo en prosa;
+    - C5 dice "en la raíz, sin distinguir mayúsculas".
+  - **Documentado, fuera de alcance:** el auditor no pudo correr la suite porque `readonly-guard.sh` le bloquea `bash scripts/test-hooks.sh`, aunque `auditor.md` dice que puede correrla. Queda para un PR de gobierno aparte.
+  - El `new_lesson` va a pendientes, que quedan en 4.
 - **Rama:** `fix/instalable`, desde `staging` en `5ddfbf1` (con T3b).
 - **Implementó:** el CTO, con las pruebas primero. Commits como `talos-bot-leon`.
 - **Riesgo:** bajo.

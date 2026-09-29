@@ -827,7 +827,15 @@ chequeo pasa 'auditor.md: evasiones fuera del modelo de amenaza con severidad ba
 chequeo pasa 'auditor-codex.md: evasiones fuera del modelo de amenaza con severidad baja' tiene_texto 'las evasiones que quedan fuera de él se reportan con severidad baja' "$ac"
 chequeo pasa 'auditor.md: el new_lesson va a lecciones pendientes' tiene_texto '.pipeline/lecciones-pendientes.md' "$au"
 # Repos instalados (instalable): el hook Stop del engineer tiene tiempo para npm test en Windows.
-stop_timeout() { awk '/run-tests\.sh/ { f = 1; next } f && /timeout:/ { print; exit }' "$repo/.claude/agents/engineer.md" | tr -d '\r' | grep -Eq 'timeout: *600$'; }
+# Solo dentro del frontmatter y con la misma sangría que el command: de run-tests.sh (la clave
+# timeout de ese hook); un timeout en otro nivel lo ignora Claude Code.
+stop_timeout() {
+  tr -d '\r' < "$repo/.claude/agents/engineer.md" | awk '
+    NR == 1 && /^---/ { fm = 1; next }
+    fm && /^---/ { exit }
+    fm && /command:.*run-tests\.sh/ { match($0, /^ */); ind = RLENGTH; f = 1; next }
+    fm && f && /^ *timeout:/ { match($0, /^ */); if (RLENGTH == ind) print; exit }' | grep -Eq 'timeout: *600$'
+}
 chequeo pasa 'engineer.md: el hook Stop declara timeout: 600' stop_timeout
 # Flujo del engineer en worktrees (T3a).
 chequeo pasa 'engineer.md: en su worktree hace git switch a la rama de la subtarea' tiene_texto 'git switch <rama>' "$repo/.claude/agents/engineer.md"
