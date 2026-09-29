@@ -7,3 +7,6 @@ __pycache__/
 .pipeline/diff-*.patch
 .pipeline/prompt-codex-*.txt
 .claude/settings.local.json
+
+# Worktrees aislados del engineer (isolation: worktree).
+.claude/worktrees/
