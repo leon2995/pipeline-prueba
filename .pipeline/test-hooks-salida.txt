@@ -324,6 +324,34 @@ ok     bloquea  gh pr merge 102 --squash
 ok     bloquea  git push -u remoto-inexistente feat/x
 ok     bloquea  git push git@github.com:leon2995/pipeline-prueba.git feat/x
 ok     bloquea  git push https://leon2995@github.com/leon2995/pipeline-prueba.git feat/x
+-- remoto de git push: redirecciones, texto entre comillas y opciones con valor (remoto-git-push)
+ok     permite  git push
+ok     permite  git push 2>&1 | tail -3
+ok     permite  git push >/dev/null
+ok     permite  git push origin feat/x 2>/dev/null
+ok     permite  git push 2> err.txt
+ok     permite  git commit -m "docs: el hook revisa git push antes del PR"
+ok     permite  gh pr create --title "T4: git push con helper" --body-file b.md
+ok     permite  git commit -m 'git push origin feat/x'
+ok     permite  git push origin feat/x -o "ci skip"
+ok     bloquea  git push "git@github.com:o/r.git" feat/x
+ok     bloquea  git push "https://leon2995@github.com/o/r.git" feat/x
+ok     bloquea  git commit -m x && git push git@github.com:o/r.git feat/x
+ok     bloquea  git push origin "feat/x
+ok     permite  git push -o ci.skip origin feat/x
+ok     permite  git push --push-option=ci.skip origin feat/x
+ok     permite  git push --push-option ci.skip origin feat/x
+ok     bloquea  git push -o https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --push-option https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --receive-pack https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push --exec https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push -uo https://github.com/o/r.git git@github.com:o/r.git feat/x
+ok     bloquea  git push -oci.skip git@github.com:o/r.git feat/x
+ok     bloquea  git push --receive-pack=x --exec=y git@github.com:o/r.git feat/x
+ok     permite  git push --repo=origin
+ok     permite  git push --repo origin
+ok     bloquea  git push --repo git@github.com:o/r.git
+ok     bloquea  git push --repo=https://leon2995@github.com/o/r.git
 ok     bloquea  git push --repo=origin feat/x
 -- identidad incompleta o de otra cuenta
 ok     bloquea  git commit -m x
@@ -436,4 +464,4 @@ ok     bloquea  tests en rojo
 ok     permite  tests en verde
 ok     permite  tests en rojo con .pipeline/BLOCKED
 
-395 ok, 0 fallos
+422 ok, 0 fallos

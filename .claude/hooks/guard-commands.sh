@@ -45,12 +45,9 @@ cmd=$(printf '%s' "$input" | json_get command)
 # - imprimir el entorno con espacios o comillas que el análisis por palabras no ve: export  -p (dos
 #   espacios), env FOO="a b", env > archivo, env 2>&1 | grep X, ( env ). Sin token en el entorno
 #   (paso f) no exponen una credencial;
-# - git push: el remoto es la primera palabra que no empieza con - después de push, así que el valor
-#   de una opción (-o x, --receive-pack x) se lee como remoto; sin remoto se asume origin (no se
-#   miran branch.<rama>.pushRemote ni remote.pushDefault) y el remoto se resuelve en el directorio del
-#   hook, no en el de un cd previo. El paso f exige un solo remoto, origin, en HTTPS;
-# - falso positivo con la identidad activa: git push 2>&1 sin remoto y un texto entre comillas con
-#   "git push" seguido de otra palabra (-m, --title) toman esa palabra como remoto y se bloquean;
+# - git push: sin remoto ni --repo se asume origin (no se miran branch.<rama>.pushRemote ni
+#   remote.pushDefault) y el remoto se resuelve en el directorio del hook, no en el de un cd previo.
+#   El paso f exige un solo remoto, origin, en HTTPS;
 # - C4 compara el nombre del autor y del committer, no el email (el paso f lo verifica con git var);
 # - C4 revisa git commit, git push, los gh pr que escriben y gh api de escritura; gh issue, gh run
 #   rerun, gh workflow run, gh label y gh release no se revisan, y gh api .../reviews con
@@ -254,14 +251,17 @@ fi
 archivo_identidad="$(dirname "$0")/../identidad-agente.txt"
 if [ -e "$archivo_identidad" ]; then
   # Cada segmento (separado por ; & | o salto de línea) se clasifica por separado: una invocación
-  # con --help no escribe, pero no borra una escritura detectada en otro segmento.
+  # con --help no escribe, pero no borra una escritura detectada en otro segmento. Antes de partir se
+  # normalizan las redirecciones con & (2>&1, >&2, &>, >|), como en analizar_git: ese & no separa.
   escribe_git=0 escribe_gh=0 empuja=0 pushes=()
   while IFS= read -r seg; do
     [ -n "${seg//[[:space:]]/}" ] || continue
     s=" $seg "
     if printf '%s\n' "$s" | grep -Eq "${I}git$F +(commit|push)([^[:alnum:]_-]|\$)"; then
       escribe_git=1
-      if printf '%s\n' "$s" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)"; then
+      # El texto entre comillas no es una invocación: un "git push" dentro de un -m o un --title no
+      # cuenta como push.
+      if printf '%s\n' "$s" | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)"; then
         empuja=1
         pushes+=("$seg")
       fi
@@ -283,7 +283,7 @@ if [ -e "$archivo_identidad" ]; then
         [ $((metodos)) -gt $((gets)) ] && escribe_gh=1
       fi
     fi
-  done <<< "$(printf '%s\n' "$cmd" | tr ';&|' '\n\n\n')"
+  done <<< "$(printf '%s\n' "$cmd" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g' | tr ';&|' '\n\n\n')"
   if [ "$escribe_git" = 1 ] || [ "$escribe_gh" = 1 ]; then
     esperado=$(tr -d '[:space:]' < "$archivo_identidad" 2>/dev/null)
     falta="falta la identidad de talos-bot-leon (.claude/settings.local.json)"
@@ -305,21 +305,39 @@ if [ -e "$archivo_identidad" ]; then
       [ "${efectivo//$'\r'/}" = '!gh auth git-credential' ] ||
         bloqueo identidad "$falta: el helper de credenciales efectivo para github.com es '${efectivo:-ninguno}', no gh."
       for p in "${pushes[@]}"; do
-        remoto=""
-        visto=0
-        set -f
-        # shellcheck disable=SC2086
-        set -- $p
-        set +f
-        for t in "$@"; do
-          if [ "$visto" = 0 ]; then [ "$t" = push ] && visto=1; continue; fi
-          case "$t" in
-            --repo|--repo=*) bloqueo identidad "$falta: git push --repo no está soportado; usa git push <remoto> <rama>." ;;
-            -*) ;;
-            *) remoto=$t; break ;;
-          esac
-        done
-        remoto=${remoto//[\"\']/}
+        # Argumentos respetando comillas, con xargs (no ejecuta nada), como en gh pr merge.
+        lista=$(printf '%s' "$p" | xargs -n1 printf '%s\n' 2>/dev/null) ||
+          bloqueo identidad "no pude leer los argumentos de git push (¿comillas sin cerrar?); escríbelo en una sola línea, sin ; & | dentro de comillas."
+        # estado 0: busca git; 1: opciones globales de git; 2: argumentos de push. El remoto es el
+        # primer posicional después de push; si no hay, el valor de --repo; si no, origin (como git).
+        remoto="" repo="" estado=0 sigue=""
+        while IFS= read -r t; do
+          if [ -n "$sigue" ]; then [ "$sigue" = repo ] && repo=$t; sigue=""; continue; fi
+          if [ "$estado" = 0 ]; then
+            case "${t#\(}" in git|*/git|git.exe|*/git.exe) estado=1 ;; esac
+          elif [ "$estado" = 1 ]; then
+            case "$t" in
+              -C|-c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix|--attr-source) sigue=valor ;;
+              -*) ;;
+              push) estado=2 ;;
+              *) estado=0 ;;
+            esac
+          else
+            case "$t" in
+              [0-9]*[\<\>]*|[\<\>]*)          # redirección: >archivo, 2>err, o el operador solo
+                case "$t" in *[!0-9\<\>]*) ;; *) sigue=valor ;; esac ;;
+              -o|--push-option|--receive-pack|--exec) sigue=valor ;;
+              --repo) sigue=repo ;;
+              --repo=*) repo=${t#--repo=} ;;
+              --*) ;;
+              -*o) sigue=valor ;;             # grupo de flags cortos que termina en -o (-uo x)
+              -*) ;;                          # otros flags; -oX lleva el valor pegado
+              *) remoto=$t; break ;;
+            esac
+          fi
+        done <<< "$lista"
+        [ "$estado" = 2 ] || bloqueo identidad "no pude leer el git push ($p); escríbelo como git push <remoto> <rama>."
+        remoto=${remoto:-$repo}
         remoto=${remoto:-origin}
         case "$remoto" in
           *://*|*@*) url=$remoto ;;
