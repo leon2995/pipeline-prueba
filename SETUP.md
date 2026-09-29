@@ -96,10 +96,10 @@ done
 Esperado: `main` con 1, `true`, `true`, `true` y `secrets:15368`, `hooks:15368`; `staging` con 0, `true`, `false`, `true` y los mismos checks. Después, a los PRs que ya estaban abiertos empújales un commit vacío (`git commit --allow-empty -m "ci: correr hooks"` y `git push`) o ciérralos y reábrelos, porque si no se quedan esperando el check `hooks`. `gh run rerun` no alcanza: repite la corrida sobre el mismo commit de merge, que es anterior al job `hooks`. No corras el pipeline entre e y f: un PR de gobierno abierto como `leon2995` ya no se podría aprobar.
 
 **c. Token e inicio de sesión de `talos-bot-leon`.** En la cuenta `talos-bot-leon`, crea un token **classic** (Settings → Developer settings → Personal access tokens → Tokens (classic)) con vencimiento y los scopes `repo`, `read:org` y `workflow`:
-- `repo` y `read:org` son el mínimo que acepta `gh auth login` con un token pegado; sin ellos responde `missing required scopes`. `public_repo` no alcanza aunque el repo sea público. `repo` solo da acceso a los repos donde `talos-bot-leon` es colaboradora (hoy, solo este), y `read:org` no afecta nada porque no hay organizaciones.
+- `repo` y `read:org` son el mínimo que acepta `gh auth login` con un token pegado; sin ellos responde `missing required scopes`. `public_repo` no alcanza aunque el repo sea público. `repo` solo da acceso a los repos propios de `talos-bot-leon` (hoy, ninguno) y a los repos donde es colaboradora (hoy, solo este), y `read:org` no afecta nada porque no hay organizaciones.
 - `workflow` hace falta para tocar `.github/workflows/`.
 - Un fine-grained token no sirve: no da acceso como colaborador a un repo personal de otra cuenta.
-- **Decisión de Leonardo (2026-09-28):** el token actual tiene más scopes que el mínimo, entre ellos `admin:org`, `delete_repo` y `user`, y así se deja. La razón: `talos-bot-leon` solo tiene escritura en este repo y no pertenece a ninguna organización. Por eso `delete_repo` y `admin:repo_hook` no tienen efecto (piden ser admin del repo), y tampoco los de organización y empresa. Los que sí aplican lo hacen solo sobre la propia cuenta del bot: `user`, las llaves (`admin:public_key`, `admin:gpg_key`, `admin:ssh_signing_key`), `gist`, los paquetes y `codespace`. **Condición:** revisar los scopes si `talos-bot-leon` se agrega a otros repos u organizaciones, y en ese caso volver al mínimo (`repo`, `read:org`, `workflow`).
+- **Decisión de Leonardo (2026-09-28):** el token actual tiene más scopes que el mínimo, entre ellos `admin:org`, `delete_repo` y `user`, y así se deja. La razón: `talos-bot-leon` solo tiene escritura en este repo, no tiene repos propios y no pertenece a ninguna organización (al 2026-09-28: 0 repos propios y 0 organizaciones). Por eso `repo` y `workflow` solo alcanzan este repo, y los scopes de organización o empresa (`admin:org`, `admin:org_hook`, `admin:enterprise`, `audit_log`, `write:discussion` y `write:network_configurations`) no tienen sobre qué actuar. Los demás aplican solo a la propia cuenta del bot: `user`, las llaves (`admin:public_key`, `admin:gpg_key`, `admin:ssh_signing_key`), `gist`, `notifications`, `project`, `copilot`, `codespace`, los paquetes (`write:packages`, `delete:packages`) y, sobre sus repos propios, que hoy no existen, `delete_repo` y `admin:repo_hook`. **Condición:** revisar los scopes si `talos-bot-leon` se agrega a otros repos u organizaciones, o si crea o recibe repos propios (un fork, por ejemplo), y en ese caso volver al mínimo (`repo`, `read:org`, `workflow`).
 
 Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat. Antes del login, guarda tu configuración de credenciales de Git para compararla después:
 
@@ -110,10 +110,12 @@ GH_CONFIG_DIR="$HOME/.talos-gh" gh auth login --hostname github.com --git-protoc
 # 2. "How would you like to authenticate GitHub CLI?": elige "Paste an authentication token".
 GH_CONFIG_DIR="$HOME/.talos-gh" gh api user --jq .login   # debe decir talos-bot-leon
 GH_CONFIG_DIR="$HOME/.talos-gh" gh auth status --hostname github.com
-# debe mostrar "Token: ghp_****" y en "Token scopes" al menos 'repo', 'workflow' y 'read:org' (o 'admin:org',
-# que lo incluye). Para ver el vencimiento real: gh api -i user, cabecera GitHub-Authentication-Token-Expiration.
-# Si dice github_pat_, es un
-# token fine-grained: lee el repo (es público) pero git push da 403. Crea el classic y repite el login.
+# debe mostrar "Token: ghp_****" y, en "Token scopes", al menos 'repo', 'workflow' y 'read:org'
+# (o 'admin:org', que lo incluye).
+# Si dice github_pat_, es un token fine-grained: lee el repo (es público), pero git push da 403.
+# Crea el classic y repite el login.
+# Vencimiento real del token, en la cabecera GitHub-Authentication-Token-Expiration:
+GH_CONFIG_DIR="$HOME/.talos-gh" gh api -i user | grep -i '^github-authentication-token-expiration'
 gh api user --jq .login                                   # debe seguir diciendo leon2995
 git config --global --get-regexp '^credential' | diff ~/credential-antes.txt - && echo sin cambios   # debe decir: sin cambios
 git credential-manager github list                        # no debe aparecer talos-bot-leon (normalmente muestra solo leon2995)
@@ -128,15 +130,15 @@ La primera pregunta importa. Si respondes Sí, `gh` le entrega el token de `talo
 3. Verifica:
    - `git credential-manager github list` muestra solo `leon2995`.
    - `git config --global --get-regexp '^credential'` sale igual que antes del login. Si no tenías helper, `gh` se configura como helper global y aquí aparecen las líneas nuevas: quítalas con `git config --global --unset-all <clave>`.
-   - Este comando consulta a GitHub con el token guardado, sin imprimirlo, y debe responder `leon2995`. La etiqueta `username=` de `git credential fill` no alcanza, porque es la que pusiste con `--username`.
+   - Este comando consulta a GitHub con el token guardado, sin imprimirlo, y debe responder `leon2995`. Si responde `sin credencial guardada`, el paso 2 no guardó nada: repítelo. La etiqueta `username=` de `git credential fill` no alcanza, porque es la que pusiste con `--username`.
 
      ```bash
-     printf 'protocol=https\nhost=github.com\nusername=leon2995\n\n' | git credential fill | sed -n 's/^password=//p' | { read -r t; GH_TOKEN="$t" gh api user --jq .login; }
+     printf 'protocol=https\nhost=github.com\nusername=leon2995\n\n' | git credential fill | sed -n 's/^password=//p' | { read -r t && [ -n "$t" ] && GH_TOKEN="$t" gh api user --jq .login || echo 'sin credencial guardada'; }
      ```
 
 Con `--insecure-storage` y la respuesta No, el token de `talos-bot-leon` queda en `~/.talos-gh/hosts.yml` y no en el keyring ni en el Credential Manager. Aun así, en `gh` 2.92.0 el login marca a `talos-bot-leon` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
 
-- **Vence: 2026-10-29** (token classic creado el 2026-09-28; GitHub responde `2026-10-29 02:05:13 UTC` en la cabecera `GitHub-Authentication-Token-Expiration` de `gh api -i user`). Rótalo a más tardar el 2026-10-15, 14 días antes: crea uno nuevo, repite el login de este paso (respondiendo No a la pregunta de Git) y revoca el viejo.
+- **Vence: 2026-10-29 02:05 UTC (2026-10-28 en hora local)** (token classic creado el 2026-09-28; GitHub responde `2026-10-29 02:05:13 UTC` en la cabecera `GitHub-Authentication-Token-Expiration`, que se ve con `GH_CONFIG_DIR="$HOME/.talos-gh" gh api -i user | grep -i '^github-authentication-token-expiration'`). Rótalo a más tardar el 2026-10-15, 14 días antes: crea uno nuevo, repite el login de este paso (respondiendo No a la pregunta de Git) y revoca el viejo.
 
 **f. Conectar al agente.** Copia `.claude/settings.local.example.json` como `.claude/settings.local.json`. Si ya existe (Claude Code lo crea al guardar permisos), fusiona solo el bloque `env`. Completa `GH_CONFIG_DIR` con la ruta real (`C:/Users/<tu usuario>/.talos-gh`). El email noreply de `talos-bot-leon` (`335185800+talos-bot-leon@users.noreply.github.com`, de Settings → Emails de esa cuenta) ya viene en la plantilla. El archivo no lleva el token. Reinicia la sesión de Claude Code para que tome el `env` nuevo.
 
