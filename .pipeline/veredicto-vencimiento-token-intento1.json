@@ -1,0 +1,45 @@
+{
+  "task": "vencimiento-token",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "media",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "C3 pide decir cómo ver el vencimiento real del token del bot, y la instrucción apunta al token equivocado. En la línea 114 (comentario dentro del bloque) y en la línea 139 (viñeta 'Vence') el comando aparece como `gh api -i user`, sin el prefijo GH_CONFIG_DIR=\"$HOME/.talos-gh\". Si Leonardo lo corre literal en su terminal, consulta con su propia credencial de gh (leon2995) y no con la del bot: no ve la cabecera GitHub-Authentication-Token-Expiration o ve la de otro token. Es justo lo que tendrá que hacer al rotar el 2026-10-15.",
+      "fix": "En las dos apariciones, escribir el comando completo: `GH_CONFIG_DIR=\"$HOME/.talos-gh\" gh api -i user | grep -i '^github-authentication-token-expiration'` (el grep evita volcar todo el cuerpo)."
+    },
+    {
+      "severity": "media",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "La razón de la decisión de scopes (línea 102) no es exacta. Dice que `delete_repo` y `admin:repo_hook` no tienen efecto porque piden ser admin del repo, pero talos-bot-leon es admin de cualquier repo propio (un fork, por ejemplo), así que esos scopes sí aplican a la propia cuenta del bot, igual que `user` o `gist`. El argumento solo vale si el bot no tiene repos propios, y el texto no lo dice (la línea 99 tiene el mismo hueco con `repo`). Además la lista deja sin clasificar scopes del token: `notifications`, `project` y `copilot` aplican a la cuenta propia; `write:discussion`, `audit_log` y `write:network_configurations` son de organización o empresa. Leonardo firma una razón que no cubre todos los scopes que eligió dejar.",
+      "fix": "Agregar a la razón que el bot no tiene repos propios, y pasar `delete_repo` y `admin:repo_hook` al grupo que aplica solo a la cuenta propia (hoy sin repos). Nombrar `notifications`, `project` y `copilot` entre los de cuenta propia y `write:discussion`, `audit_log` y `write:network_configurations` entre los de organización o empresa. Sumar a la condición de revisión el caso en que el bot cree o reciba repos propios."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "El comando de verificación del paso 3 del remedio puede dar un falso positivo. Input: GCM no devuelve credencial para leon2995 (el login del paso 2 falló o se canceló el prompt). Entonces sed no emite nada, `t` queda vacío y `GH_TOKEN=\"\" gh api user` cae a la credencial propia de gh de Leonardo, que responde `leon2995`: justo lo esperado. El caso peligroso (token del bot con etiqueta leon2995) sí se detecta, porque responde talos-bot-leon. Por eso la severidad es baja.",
+      "fix": "Proteger el vacío: `{ read -r t && [ -n \"$t\" ] && GH_TOKEN=\"$t\" gh api user --jq .login || echo 'sin credencial guardada'; }`."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "La línea 139 mezcla zonas horarias. 'Creado el 2026-09-28' es fecha local, y el vencimiento '2026-10-29 02:05:13 UTC' cae el 2026-10-28 por la noche en hora local (UTC-5 o UTC-6). 'Vence: 2026-10-29' queda un día tarde en hora local. La fecha de rotación (2026-10-15) deja margen, así que no rompe nada.",
+      "fix": "Escribir 'Vence: 2026-10-29 02:05 UTC (2026-10-28 en hora local)'."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/.pipeline/criterios-vencimiento-token.md",
+      "detail": "C5 (CI en verde, PR abierto como talos-bot-leon, `gh pr view`) solo se puede verificar después de abrir el PR, lo que repite la lección 2026-09-27 de LESSONS.md. Lo que sí se puede verificar ahora está bien: el commit ec51797 tiene autor y committer talos-bot-leon <335185800+talos-bot-leon@users.noreply.github.com>. El mensaje del commit trae la fecha vieja 2026-12-27; queda pendiente corregirla en el squash.",
+      "fix": "Tratar CI y autoría del PR como verificación posterior al PASS y no como criterio del auditor. Corregir la fecha en el mensaje del squash."
+    },
+    {
+      "severity": "baja",
+      "file": "C:/Users/lalvarez.e/proyectos/pipeline-prueba/SETUP.md",
+      "detail": "En las líneas 115 y 116 el comentario se corta a mitad de frase ('# Si dice github_pat_, es un' / '# token fine-grained: ...').",
+      "fix": "Unir la frase en una sola línea de comentario o partirla por una pausa natural."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "- [2026-09-28] [vencimiento-token] docs de dos cuentas: cada comando gh o git que se refiere a la cuenta del agente, incluidas las menciones en prosa, debe llevar completo el prefijo de configuración del bot; sin él se ejecuta con la cuenta humana."
+}

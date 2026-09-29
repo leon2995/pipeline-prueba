@@ -10,8 +10,10 @@ Riesgo: **bajo**. Solo documentación: `README.md` y `SETUP.md`, que no son ruta
 - **C3.** `SETUP.md`, paso c, verifica con `gh auth status` que el token sea classic (`ghp_`, con al menos `repo`, `workflow` y `read:org` o `admin:org`) y dice cómo ver el vencimiento real. Un `github_pat_` (fine-grained) lee el repo público pero da 403 al empujar, como pasó en la primera verificación del paso f. Además trae el remedio para quien respondió Sí a "Authenticate Git with your GitHub credentials?", en tres pasos:
   1. `git credential-manager github logout talos-bot-leon`;
   2. `git credential-manager github login --username leon2995 --device`, confirmando en el navegador que la sesión sea `leon2995` y no el bot;
-  3. la verificación: `github list`, la configuración global de credenciales y el comando que consulta a GitHub con el token guardado sin imprimirlo (`git credential fill | sed -n 's/^password=//p' | { read -r t; GH_TOKEN="$t" gh api user --jq .login; }`), que debe responder `leon2995`.
+  3. la verificación: `github list`, la configuración global de credenciales y el comando que consulta a GitHub con el token guardado sin imprimirlo (`git credential fill | sed -n 's/^password=//p' | { read -r t && [ -n "$t" ] && GH_TOKEN="$t" gh api user --jq .login || echo 'sin credencial guardada'; }`), que debe responder `leon2995` y no cae a la cuenta propia de gh si no hay credencial guardada. *Forma corregida en el reintento 1.*
 
   Aclara que lo corre Leonardo en su terminal y no el agente, y por qué la etiqueta `username=` no alcanza. El texto lo pidió Leonardo después de aplicar ese remedio en el paso c.
 - **C4.** Ningún comando documentado imprime un token.
-- **C5.** El CI del PR está en verde. El commit, el push y el PR salen como `talos-bot-leon`: se verifica con `gh pr view --json author,commits` y con la actividad de la rama.
+- **C5.** Los commits de la rama tienen autor y committer `talos-bot-leon <335185800+talos-bot-leon@users.noreply.github.com>`.
+
+Verificación posterior al PASS (fuera de los criterios del auditor, según LESSONS.md): CI del PR en verde; el push y el PR salen como `talos-bot-leon` (`gh pr view --json author,commits` y actividad de la rama); el mensaje del squash corrige la fecha vieja (2026-12-27) del primer commit.
