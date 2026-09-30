@@ -6,17 +6,19 @@ Este repositorio se desarrolla con un pipeline de agentes. Tú, la sesión princ
 
 | Rol | Quién | Qué ve | Modelo y esfuerzo |
 |---|---|---|---|
-| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`) con ultracode (`"ultracode": true` en `.claude/settings.json`) |
-| test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan | Sonnet (`sonnet`), esfuerzo alto (`effort: high`) |
-| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md (nunca las lecciones pendientes) | Hereda modelo y esfuerzo de la sesión (`model: inherit`, sin `effort`) |
+| CTO / planner | Sesión principal (tú) | Toda la conversación con Leonardo | Opus 5.5 (`claude-opus-5-5`), esfuerzo muy alto (`"effortLevel": "xhigh"` en `.claude/settings.json`), sin ultracode fijo: para una investigación grande, Leonardo escribe *ultracode* en el prompt |
+| test-writer | Subagente `test-writer` | Solo criterios de aceptación e interfaces del plan | Sonnet 5.5 (`model: sonnet`, que en Claude Code 2.1.285 resuelve a `claude-sonnet-5-5`), esfuerzo alto (`effort: high`) |
+| engineer | Subagente `engineer` | Solo plan de la subtarea, criterios, ruta de tests y LESSONS.md (nunca las lecciones pendientes) | Sonnet 5.5 (`claude-sonnet-5-5`), esfuerzo muy alto (`effort: xhigh`), nunca `max` |
 | auditor | Subagente `auditor` | Solo criterios, plan o diff, evidencia y LESSONS.md | Opus 5.5 (`claude-opus-5-5`), esfuerzo alto (`effort: high`) |
 | Segundo auditor | `/audit-codex` (Codex CLI con ChatGPT Business) | Solo criterios y diff | `gpt-5.6-sol`, esfuerzo alto (`model_reasoning_effort="high"`) |
 | JEV (router) | `scripts/jev.py` | Veredictos. Determinista, sin LLM | No aplica |
 | Humano | Leonardo | Aprueba la propuesta y mergea el PR a `main` | No aplica |
 
+**Modelos.** Ningún rol usa Fable. Esta asignación se revisa con los datos de las primeras 3 a 5 tareas reales: intentos por subtarea y hallazgos del auditor. Si el engineer en Sonnet necesita más intentos, vuelve a Opus.
+
 Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo que su fila indica, por escrito, dentro del prompt de delegación. Si necesitas que sepa algo más, escríbelo en el prompt; nunca asumas que lo sabe.
 
-**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot-leon`, colaboradora del repo con escritura, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). Leonardo es `leon2995`: dueño del repo y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
+**Cuentas de GitHub.** El agente (CTO y subagentes) trabaja como `talos-bot-leon`, con la configuración de `.claude/settings.local.json` (ver `SETUP.md`). En este repo es colaboradora con escritura. En los repos de la organización es miembro de la organización y admin de los repos que crea (ver Repos en la organización). Leonardo es `leon2995`: dueño del repo, owner de la organización y code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
 
 **Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles:
 - el commit de pruebas va primero;
@@ -31,11 +33,34 @@ Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo 
   - al abrir el PR, que con los checks en verde quede `mergeable_state: blocked` y con el code owner en `requested_reviewers`.
 
   Si alguna falla, trátalo como protección inactiva. Si `mergeable_state` responde `unknown`, reintenta en unos segundos: GitHub lo calcula de forma perezosa. Estos chequeos prueban que hay protección y que el PR no entra sin revisión, pero no que la revisión sea del code owner, porque GitHub pide la revisión del code owner con solo que exista `CODEOWNERS`. Esa garantía depende del GET de Leonardo.
+- **En los repos de la organización**, la protección sale de los rulesets de organización y la lees tú:
+  - antes de aplicar la regla, `gh api repos/<org>/<repo>/rules/branches/<rama>` debe traer, en `staging` y en `main`, una regla `pull_request` con `require_code_owner_review: true`;
+  - eso reemplaza el GET de Leonardo y el `protected: true`;
+  - el chequeo de `mergeable_state` al abrir el PR sigue igual.
 - Aplica en cualquier nivel de riesgo, por decisión de Leonardo. No lleva auditoría del plan (paso 1), ni Codex (paso 6), ni JEV (paso 7): la aprobación de Leonardo como code owner es el control efectivo.
 - Los archivos de `.pipeline/` (estado operativo) no cuentan como ruta fuera de gobierno.
 - Es una sola ronda: los hallazgos se corrigen o se documentan en el PR, y Leonardo decide al revisar.
 - Si la protección no está activa, va el protocolo completo de la Fase 3.
 - Los PRs de código de apps siguen siempre con el protocolo completo.
+
+## Repos en la organización
+
+Los repos de los proyectos viven en la organización `org` de `.claude/pipeline.conf` (`finconnect-com`), siempre privados y con el equipo `equipo` (`forja`).
+- **Quién los crea:** el agente, nunca Leonardo, y solo con `/crear-repo <nombre>`, después del sí de la Fase 1.
+- **Qué bloquea el hook** (`guard-commands.sh`):
+  - crear un repo sin `--private`, sin el equipo o fuera de la organización;
+  - cambiar la visibilidad;
+  - hacer fork, borrar o transferir repos;
+  - abrirlos a terceros (colaboradores, invitaciones, deploy keys, webhooks, Pages).
+- **Por qué el hook es la barrera principal para crear:** en el plan Team de GitHub no se puede restringir a los miembros a crear solo repos privados.
+- **Del lado de GitHub:** los miembros no pueden cambiar la visibilidad, borrar ni transferir repos, y los rulesets de organización protegen `main` y `staging` en todos los repos (`SETUP.md`).
+
+**Al inicio de cada sesión**, el hook SessionStart (`.claude/hooks/check-public-repos.sh`) revisa si hay repos públicos en la organización y en la cuenta `talos-bot-leon`, y deja en tu contexto una línea que empieza con `Repos públicos:`. Antes de cualquier otra cosa:
+- `ALERTA`: avísale a Leonardo en la primera línea de tu respuesta, con la lista de repos. No toques esos repos: detente y espera su instrucción.
+- `NO SE PUDO VERIFICAR`: corre tú `gh repo list <org> --visibility public --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner'`, y lo mismo con `talos-bot-leon`. Si también falla, avísale igual: un error no equivale a cero repos públicos.
+- `OK`: sigue.
+- Si no ves esa línea en tu contexto, corre tú la verificación.
+- En modo no interactivo (`claude -p`), el aviso de `ALERTA` termina con la línea `ESPERANDO OK` (ver Modo no interactivo).
 
 ## Fase 0: Intake
 
@@ -117,7 +142,7 @@ Por cada subtarea, en este orden:
 - El token de `talos-bot-leon` vive en `~/.talos-gh/hosts.yml`, fuera del repo; el agente llega a él por `GH_CONFIG_DIR`, que definen `.claude/settings.local.json` (ignorado por git) y la plantilla `.claude/settings.local.example.json`. Ningún token vive en el repo ni en variables de entorno.
 - Qué procesos pueden llegar a las credenciales: `gh` y `git` (por el helper `gh auth git-credential`) y cualquier proceso hijo de la sesión, incluido Codex, que hereda `GH_CONFIG_DIR` y podría leer el archivo si lo buscara. El hook bloquea los comandos que nombran tokens o esos archivos, los que imprimen credenciales o variables de entorno (`git credential fill|approve|reject` incluidos) y los que cambian de cuenta. También bloquea `git credential-manager`, salvo `github list`, porque toca el Credential Manager de Leonardo. `Read`, `Edit` y `Write` están denegados sobre `settings.local.json` y `~/.talos-gh`.
 - La herramienta PowerShell está denegada en `.claude/settings.json`: el agente usa solo Bash, que es donde corren los hooks.
-- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot-leon` para `git commit`, `git push`, los `gh pr` que escriben y `gh api` de escritura. Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
+- Con `.claude/identidad-agente.txt` presente, el hook exige la identidad de `talos-bot-leon` para `git commit`, `git push`, los `gh pr` que escriben, `gh api` de escritura y los `gh repo` que escriben (`create`, `new`, `edit`, `rename`, `archive`, `unarchive`, `sync`). Si falta, bloquea en lugar de volver en silencio a la cuenta de Leonardo. Otros comandos de `gh` que escriben (`gh issue`, `gh run rerun`, `gh workflow run`, `gh release`) no se revisan; los límites conocidos están en el encabezado de `guard-commands.sh`.
 
 ## Prohibido sin excepción
 
@@ -146,7 +171,7 @@ Por cada subtarea, en este orden:
 
 ### Plantilla de PR
 
-El cuerpo del PR va por `gh pr create --body-file <archivo>`, los comentarios por `gh pr comment --body-file <archivo>` y los mensajes de commit largos por `git commit -F <archivo>`, con el archivo escrito con la herramienta Write. Los títulos van sin flags ni nombres de variables. El hook revisa el texto de cada comando Bash y bloquea el que nombra tokens, archivos de credenciales o variables de identidad, aunque sea dentro de un `--title`, un `--body` o un `-m`.
+El cuerpo del PR va por `gh pr create --body-file <archivo>`, los comentarios por `gh pr comment --body-file <archivo>` y los mensajes de commit largos por `git commit -F <archivo>`, con el archivo escrito con la herramienta Write. Los títulos van sin flags ni nombres de variables. El hook revisa el texto de cada comando Bash y bloquea el que nombra tokens, archivos de credenciales o variables de identidad, aunque sea dentro de un `--title`, un `--body` o un `-m`. También bloquea el texto `gh repo create` (o `new`, `edit`, `fork`, `delete`, `deploy-key`), `gh api`, `gh alias` o `gh extension` dentro de un `--title`, un `-m` o un `-f body=`. Esos textos van con `--body-file`, `git commit -F` o `gh api -F body=@archivo`.
 
 Título: `T1: nombre`
 Cuerpo, en este orden:

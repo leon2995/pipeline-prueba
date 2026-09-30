@@ -2,7 +2,8 @@
 name: engineer
 description: Implementa una subtarea a partir de un plan aprobado y criterios de aceptación. Úsalo solo cuando el plan esté aprobado y los tests de aceptación ya existan en tests/acceptance/.
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: inherit
+model: claude-sonnet-5-5
+effort: xhigh
 permissionMode: acceptEdits
 maxTurns: 60
 isolation: worktree
