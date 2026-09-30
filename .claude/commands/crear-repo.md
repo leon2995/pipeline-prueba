@@ -117,13 +117,13 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    - el link del PR T0, para que lo apruebe y lo mergee con "Create a merge commit";
    - en `<ruta>`, copiar `.claude/settings.local.example.json` como `.claude/settings.local.json` y completar `GH_CONFIG_DIR`. Lo hace él porque el hook no te deja nombrar ese archivo.
 
-   Railway espera al paso 9: hoy `main` solo tiene el README y `staging` no existe.
+   Railway espera al paso 9: hoy `main` solo tiene el README y `staging` no existe. Guarda la sección Railway que imprimió el instalador en el paso 5, porque se la pasas a Leonardo en el paso 9. Si ya no la tienes, repite la simulación sobre `<ruta>`.
 
 9. **Después del merge: crear `staging` desde `main`, y Railway.**
    - **Por qué recién ahora:** antes del merge, el hook bloquea el push, porque `origin/main` todavía no tiene `CODEOWNERS`.
    - **Lo esperado:** los dos SHA deben ser iguales.
    - **Si el push falla:** no lo reintentes de otra forma. Es HUMAN, y Leonardo tiene dos salidas: crear `staging` desde la web (Branches, New branch, desde `main`), o desactivar un momento el ruleset `staging` y volver a activarlo (`SETUP.md` 4c.b).
-   - **Railway:** con `staging` creada, Leonardo corre la sección Railway de los pasos manuales del instalador. El `package.json` del SDK de Railway entra después por PR, desde la sesión nueva.
+   - **Railway:** con `staging` creada, pásale a Leonardo la sección Railway de los pasos manuales del instalador (la que guardaste en el paso 5) y él la corre en su terminal. El `package.json` del SDK de Railway entra después por PR, desde la sesión nueva.
 
    ```bash
    git -C <ruta> fetch origin

@@ -11,6 +11,23 @@
     - el encabezado de los pasos supone `/crear-repo` también fuera de la organización;
     - la app de Railway con All repositories, frente a Only select repositories.
   - **La lección nueva** va a pendientes, que quedan en 8, hasta el cierre de B.
+- **Verificación previa, con un workflow de 2 agentes:** uno simuló `/crear-repo` de punta a punta sin GitHub y otro revisó el diff con ojo adversarial. Dejó 24 verificaciones correctas y 8 bajas. La simulación salió bien en todo:
+  - el paso 0 cumple sus tres condiciones;
+  - el repo con README en `feat/T0-framework` se detecta como `modo nuevo`, sin conflictos;
+  - `identidad-agente.txt` sale con 15 bytes (`talos-bot-leon` y un salto);
+  - no se crea ninguna rama y no hay notas;
+  - los pasos tienen solo encabezado, Agente y Railway;
+  - no queda ningún marcador;
+  - la segunda corrida sale toda `igual`;
+  - con `staging` en el remoto dice `existe`, y fuera de la organización sale la nota B4.
+
+  Lo que se hizo con las bajas:
+  - **Corregida:** el paso 8 guarda la sección Railway del paso 5 y el paso 9 se la pasa a Leonardo. Antes, ningún paso se la entregaba.
+  - **Documentadas:**
+    - la prueba unitaria del orden de los conflictos solo fija que van antes de la sección Agente, no después del encabezado;
+    - `preparar_pasos` reemplaza `gh_config_dir` antes que `destino`, y un `HOME` con `{{destino}}` o un destino con `{{conflictos}}` y un salto de línea alterarían la salida (casos rebuscados);
+    - el encabezado y la línea de la app de Railway suponen un repo de la organización, también fuera de ella;
+    - la suite del repo instalado no se corrió completa en local: tarda más de 30 minutos. Se verificó en forma estática que solo `SETUP.md` e `instalador/` faltan, y que los dos van detrás de guardas `[ -f ]`.
 - **Rama:** `feat/B-instalador-org`, desde `staging` en `b016fd9` (A2, #21).
 - **Implementaron:**
   - el test-writer, las pruebas de aceptación;
