@@ -1093,7 +1093,7 @@ for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 
   'rama staging: crear' '<scratchpad>' 'nunca con `mktemp`' 'docs/adr/0001-' '.pipeline/modo' \
   'la sección Agente de los pasos manuales' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
   "-d '<descripción>'" 'un vencimiento del timeout no es un fallo' 'la sección Railway de los pasos manuales' \
-  'sin la línea con la ruta de la configuración de gh del bot'; do
+  'sin la línea con la ruta de la configuración de gh del bot' 'la sección Railway que imprimió el instalador en el paso 5'; do
   chequeo pasa "crear-repo.md: $t" tiene "$t"
 done
 chequeo falla 'crear-repo.md ya no remite a las secciones 1 y 2 del instalador' tiene 'secciones 1 y 2'
