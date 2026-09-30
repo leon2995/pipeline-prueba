@@ -84,7 +84,7 @@ Un workflow de 6 agentes contrastó A2 con las fuentes primarias (API de GitHub,
   - aclara que `rules/branches` reemplaza el `protected: true`, pero no la verificación del bypass que hace Leonardo;
   - los temporales van en el scratchpad o en una ruta ignorada.
 - **C7:** SETUP.md 4c:
-  - registra lo que Leonardo configuró el 2026-09-30, con los ids de los rulesets;
+  - registra lo que Leonardo configuró el 2026-09-29 (hora local), con los ids de los rulesets;
   - la emergencia se resuelve desde la web y termina con el paso 3;
   - el audit log reemplaza a `/history`;
   - el PATCH de Pages lleva los tres campos;
@@ -95,9 +95,13 @@ Un workflow de 6 agentes contrastó A2 con las fuentes primarias (API de GitHub,
 ## Fuera de alcance (B)
 
 El instalador. Lo que B tiene que hacer para que `/crear-repo` funcione de punta a punta en un repo de la organización:
-- generar `.claude/identidad-agente.txt`, que es lo que habilita el paso 0 de `/crear-repo`;
+- generar `.claude/identidad-agente.txt`;
 - no crear `staging` local en un repo nuevo, porque `staging` nace en el servidor desde `main`;
 - en un repo de la organización:
   - no imprimir la sección 1 de Git ni la 2 de invitación y protección;
-  - no emitir la nota del dueño (el code owner sigue siendo `dueno=`, aunque el dueño del `origin` sea la organización);
-- dejar los pasos de Railway para después de crear `staging`.
+  - no emitir ninguna nota (`nota:`). La del dueño no aplica, porque el code owner sigue siendo `dueno=` aunque el dueño del `origin` sea la organización;
+- dejar los pasos de Railway para después de crear `staging`;
+- invertir el chequeo de la suite "el paso 0 de /crear-repo corta con el instalador actual", que pasa a exigir que no corte.
+
+Las tres primeras condiciones de salida (`crear .claude/identidad-agente.txt`, sin `rama staging: crear` y sin `nota:`, sobre un repo con `origin` de la organización y un commit) son el contrato con el paso 0 de `/crear-repo`.
+- *Ajustado después de la ronda del auditor:* antes, la simulación del paso 0 no tenía `origin` ni commits, y la condición de las notas habría cortado también con B.

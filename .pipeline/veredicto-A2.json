@@ -1,0 +1,57 @@
+{
+  "task": "A2",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "media",
+      "file": ".pipeline/evidencia/A2.md",
+      "detail": "C8 no tiene evidencia completa. El criterio pide que la suite nueva, corrida con los archivos de origin/staging, falle en los chequeos de C1 a C7 (mutación). La evidencia dice 'Mutación: en curso'. El archivo scratchpad/a2-mutacion.txt tiene 156 líneas y se corta en la sección 'gh pr merge y rutas de gobierno'. Hasta ahí solo muestra los FALLO esperados de 137 y 138 (.gitleaksignore y .gitleaks.toml). No hay salida de los bloques SessionStart, /crear-repo, secrets, modelos, CLAUDE.md ni SETUP.md. Sin esa salida, C8 no cuenta como cumplido. La suite completa en Windows sobre la rama también figura como pendiente.",
+      "fix": "Terminar la mutación y adjuntar el resumen a la evidencia antes del PR: número de FALLO por bloque (sesion, crear-repo, secrets, modelos, CLAUDE.md, SETUP.md) y confirmación de que cada criterio de C1 a C7 tiene al menos un FALLO."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/commands/crear-repo.md",
+      "detail": "Paso 0: la condición 'no traer ninguna nota' sobre la simulación no se cumple ni siquiera con el B que declaran los criterios. La carpeta de simulación sale de 'git init <scratchpad>/sim-<nombre>' y no tiene origin. Con cualquier instalador que conserve identificar_repo, la salida trae 'nota: sin origin: el repo sale del nombre de la carpeta...' (instalar.sh, identificar_repo, rama TIENE_ORIGIN=0). La lista 'Fuera de alcance (B)' de criterios-A2.md solo pide quitar la nota del dueño en repos de la organización, no la de 'sin origin'. Un B que cumpla su lista deja /crear-repo cortado en el paso 0 para siempre: falla cerrado, pero el comando no funciona de punta a punta. Además, la condición 'no decir rama staging: crear' no prueba nada en esa simulación: el repo no tiene commits y v1 siempre imprime 'rama staging: sin commits'.",
+      "fix": "Dos opciones. (a) Dar a la simulación un origin de la organización (git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git) y un commit vacío, para que ejercite las mismas ramas de B que el paso 5. (b) Agregar a la lista de B 'no emitir la nota sin origin' o acotar la condición a notas distintas de esa. Mejor aún, sumar una prueba que corra el instalador actual sobre la simulación y verifique que el paso 0 corta y por qué."
+    },
+    {
+      "severity": "baja",
+      "file": "CLAUDE.md",
+      "detail": "La excepción del PR T0 cubre las 6 compuertas que piden los criterios. Pero el párrafo 'Cambios en rutas de gobierno' (commit de pruebas primero, mutación, 'la auditoría que corresponda según el proceso ligero') y el 'Proceso ligero' (una ronda del auditor Claude para PRs que solo tocan rutas de gobierno) siguen sin nombrarla. El PR T0 es casi todo rutas de gobierno y el texto del T0 dice 'sin ... auditor'. Quedan dos reglas sin precedencia explícita: se repite parcialmente la lección [lecciones] de excepciones al protocolo.",
+      "fix": "En esos dos párrafos, agregar 'salvo el PR T0 (ver Repos en la organización)'."
+    },
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh",
+      "detail": "Los chequeos de C4 son textuales: grep de 'sha256sum -c -', de ' ERR |INF 0 commits scanned', de -m y de --ignore-gitleaks-allow en el bloque YAML. Ninguno prueba el comportamiento de fallar cerrado (por ejemplo, correr el bloque run con un gitleaks falso que sale con 0 y escribe ERR). La evidencia lo probó a mano, pero la suite no detectaría una regresión en la lógica del if, como un cambio de regex que ya no case.",
+      "fix": "Opcional: extraer el bloque run de secrets y correrlo con un ./gitleaks falso que emita 'INF 0 commits scanned', otro que emita ' ERR ' y otro OK, y exigir que salga con 1, 1 y 0."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/commands/crear-repo.md",
+      "detail": "Paso 1: gh repo create ... -d \"<descripción>\" va entre comillas dobles, y la descripción viene de Leonardo o de la propuesta. Un '$', una comilla invertida o una '\"' dentro de ella se expande o rompe el comando. Por ejemplo, 'Costo $100/mes' queda como 'Costo 00/mes'. Además, <scratchpad> es 'la carpeta que indica el sistema', que en Windows llega con barras invertidas (C:\\Users\\...): pegada literal en Bash, pierde las barras. Fuera del modelo de amenaza solo en parte: son errores probables del agente.",
+      "fix": "Indicar comillas simples para la descripción (y cómo tratar una ' dentro de ella), y escribir <scratchpad> con barras normales (C:/Users/...)."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/commands/crear-repo.md",
+      "detail": "Paso 7: 'gh pr checks --watch' con un timeout de Bash de 600000 ms. Si el job hooks, que corre la suite dos veces (gawk y mawk), tarda más de 10 minutos, la llamada vence. La regla del comando convierte eso en HUMAN, aunque el CI termine bien.",
+      "fix": "Decir que un vencimiento del timeout no es un fallo del check: se repite gh pr checks sin --watch hasta que termine."
+    },
+    {
+      "severity": "baja",
+      "file": "SETUP.md",
+      "detail": "4c.a registra '2026-09-30' para los rulesets, Pages, presupuesto y Railway, y 4c.a/2026-09-29 para lo demás. La fecha local de hoy es 2026-09-29, así que 2026-09-30 es probablemente el created_at en UTC y mezcla dos husos en la misma lista. 4c.c ('GitHub Apps de los admins de repo... desactívalo; confirma el nombre exacto de la opción') afirma un ajuste que no se verificó contra GitHub, contra la lección 'documentar contra la herramienta real'. Está marcado como no confirmado, por eso va con severidad baja.",
+      "fix": "Unificar en hora local (o marcar UTC) y verificar la opción de GitHub Apps en la pantalla de Member privileges antes de afirmarla, o redactarla como pregunta abierta."
+    },
+    {
+      "severity": "baja",
+      "file": ".pipeline/evidencia/A2.md",
+      "detail": "No pude probar los hooks con casos sueltos: readonly-guard.sh bloquea 'bash', 'git -C' y todo comando compuesto, así que la revisión fue por lectura del código. Por lectura: check-public-repos.sh cumple las tres salidas, ALERTA junto con una cuenta fallida, faltan org o bot, CRLF y el tope de 1000. El paso 0 corta con el instalador v1: 'identidad-agente.txt' no está en el manifiesto ni entre los generados, así que la simulación nunca lista 'crear .claude/identidad-agente.txt'. El job secrets falla cerrado con set -euo pipefail, curl -f, sha256sum -c y el grep de ERR y de 0 commits, y sigue llamándose secrets. La portabilidad en Git Bash de la suite completa depende de A1b, que todavía no está en staging.",
+      "fix": "Ninguno en el código; dejarlo documentado en el PR."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Una compuerta que reconoce una versión futura de un componente por su salida (por ejemplo, 'sin notas') debe listarse como requisito en el contrato de la subtarea que construye esa versión, y probarse con la salida real de la versión actual; si no, la compuerta corta para siempre."
+}

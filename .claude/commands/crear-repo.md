@@ -11,7 +11,8 @@ Crea el repo de `$ARGUMENTS`: el primer argumento es el nombre y el resto, la de
 - `<org>` y `<equipo>` son `org` y `equipo` de `.claude/pipeline.conf`.
 - `<nombre>` va en minúsculas, con números, `.`, `_` y `-`, y empieza con letra o número.
 - `<ruta>` es la carpeta hermana del repo del framework con ese nombre, por ejemplo `C:/Users/<usuario>/proyectos/<nombre>`.
-- `<scratchpad>` es la carpeta de temporales de tu sesión (la que indica el sistema). Si no hay, usa `.claude/worktrees/tmp/` del repo del framework, que git ignora.
+- `<scratchpad>` es la carpeta de temporales de tu sesión (la que indica el sistema), escrita con barras normales (`C:/Users/...`): en Bash, las barras invertidas se pierden. Si no hay, usa `.claude/worktrees/tmp/` del repo del framework, que git ignora.
+- `<descripción>` va entre comillas simples, para que un `$` o una comilla doble no se interpreten. Si la descripción trae una comilla simple, cámbiala por una tipográfica (’).
 - `<archivo>` es un archivo que escribes con Write dentro de `<scratchpad>`. Nunca va dentro de `<ruta>` (el `git add -A` lo metería en el PR), nunca con `mktemp` y nunca en `/tmp`: fuera de las carpetas de trabajo, cada lectura le pide permiso a Leonardo.
 - `<n>` es el número del PR.
 
@@ -22,24 +23,26 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
 - **El sí de la Fase 1.** Hace falta el sí explícito de Leonardo a la propuesta de este proyecto. Para el repo de prueba de `SETUP.md` 4c.d, su pedido reemplaza ese sí.
 - **Desde el repo del framework.** `test -f instalador/instalar.sh` debe salir con 0. Si no, estás en un repo instalado: pídele a Leonardo que abra la sesión en el repo del framework.
 - **La fuente, limpia.** `git status --porcelain` debe salir vacío. Anota `git rev-parse --short HEAD` para el cuerpo del PR.
-- **El instalador tiene que ser el nuevo (B).** Simúlalo sobre una carpeta de prueba:
+- **El instalador tiene que ser el nuevo (B).** Simúlalo sobre una carpeta de prueba igual a la del paso 5: con `origin` de la organización y un commit, como el README que crea el paso 1.
 
    ```bash
    git init <scratchpad>/sim-<nombre>
+   git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git
+   git -C <scratchpad>/sim-<nombre> commit --allow-empty -m simulacion
    bash instalador/instalar.sh <scratchpad>/sim-<nombre>
    ```
 
    La salida debe cumplir tres cosas:
-   - listar `crear .claude/identidad-agente.txt`;
-   - no decir `rama staging: crear`;
-   - no traer ninguna nota.
+   - tener la línea `crear .claude/identidad-agente.txt`;
+   - no tener la línea `rama staging: crear`;
+   - no tener ninguna línea que empiece con `nota:`.
 
-   Si no las cumple, es el instalador v1, anterior a B. En ese caso, HUMAN, sin crear el repo: el v1 no genera la identidad del agente, crea `staging` local en el commit del README e imprime pasos que chocan con este flujo.
+   Si no las cumple, es el instalador v1, anterior a B. En ese caso, HUMAN, sin crear el repo: el v1 no genera la identidad del agente, crea `staging` local en el commit del README y avisa que cambies el dueño en `CODEOWNERS`. La suite comprueba que este paso corta con el instalador actual.
 
-1. **Crear el repo.** Si no hay descripción, quita `-d "<descripción>"`. Si falla (por ejemplo, porque el nombre ya existe), HUMAN: no uses un repo que ya existía.
+1. **Crear el repo.** Si no hay descripción, quita `-d '<descripción>'`. Si falla (por ejemplo, porque el nombre ya existe), HUMAN: no uses un repo que ya existía.
 
    ```bash
-   gh repo create <org>/<nombre> --private --team <equipo> --add-readme -d "<descripción>"
+   gh repo create <org>/<nombre> --private --team <equipo> --add-readme -d '<descripción>'
    ```
 
 2. **Verificar el repo.** El primero debe responder exactamente `private main true`. El segundo, una línea con `<equipo>` y su permiso; anótalo en el reporte. El tercero debe dar un SHA; un 404 es HUMAN.
@@ -109,7 +112,7 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    gh api repos/<org>/<nombre>/pulls/<n> --jq '"\(.mergeable_state) \([.requested_reviewers[].login] | join(","))"'
    ```
 
-   Corre `gh pr checks --watch` con un timeout de Bash amplio (600000 ms).
+   Corre `gh pr checks --watch` con un timeout de Bash amplio (600000 ms). Si ese tiempo vence, no es HUMAN: un vencimiento del timeout no es un fallo del check. Repite `gh pr checks <n> --repo <org>/<nombre>` sin `--watch` hasta que todos terminen.
 
 8. **Detente y pásale a Leonardo:**
    - el link del PR T0, para que lo apruebe y lo mergee con "Create a merge commit";

@@ -23,13 +23,13 @@ Regla central: ningún subagente ve la conversación. Se le pasa únicamente lo 
 - **En los repos de la organización**, es miembro de la organización y admin de los repos que crea, y Leonardo es owner. Son los repos cuyo `origin` tiene por dueño el `org` de `.claude/pipeline.conf`; ver Repos en la organización.
 - **En los dos casos**, Leonardo (`leon2995`) es el code owner de las rutas de gobierno (`.github/CODEOWNERS`, derivado de `.claude/rutas-gobierno.txt`). El agente nunca aprueba PRs.
 
-**Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles:
+**Cambios en rutas de gobierno** (`.claude/rutas-gobierno.txt`), salvo el PR T0 (ver Repos en la organización): los implementa el CTO, pruebas e implementación, porque el engineer y el test-writer no pueden tocar esas rutas. Se compensa con cuatro controles:
 - el commit de pruebas va primero;
 - si el cambio tiene código o pruebas, la suite se corre contra `staging` para mostrar que detecta la regresión (mutación);
 - la auditoría que corresponda según el proceso ligero;
 - la aprobación de Leonardo como code owner.
 
-**Proceso ligero para PRs que solo tocan rutas de gobierno.** Van con una ronda del auditor Claude y la aprobación de Leonardo como code owner, sin Codex ni JEV, siempre que la protección con code owners esté activa en `staging` y `main`. Cómo se verifica la protección:
+**Proceso ligero para PRs que solo tocan rutas de gobierno**, salvo el PR T0 (ver Repos en la organización), que no lleva ronda del auditor. Van con una ronda del auditor Claude y la aprobación de Leonardo como code owner, sin Codex ni JEV, siempre que la protección con code owners esté activa en `staging` y `main`. Cómo se verifica la protección:
 - La configuración (`require_code_owner_reviews` en `true` en las dos ramas) solo la ve una cuenta admin. La verifica Leonardo con el GET del paso 4b.e de `SETUP.md` del repo del framework, y vuelve a hacerlo si cambia la protección.
 - Tú, como `talos-bot-leon`, verificas dos cosas:
   - antes de aplicar la regla, que `gh api repos/<dueño>/<repo>/branches/<rama>` dé `protected: true` en `staging` y en `main`;

@@ -189,11 +189,10 @@ Si en el punto 1 GitHub pide una aprobación, o en el punto 2 no la pide, el com
 
 Los repos de los proyectos los crea el agente en `finconnect-com` con `/crear-repo`: privados y con el equipo `forja` (CLAUDE.md, Repos en la organización). En el plan Team no se puede restringir a los miembros a crear solo repos privados (es exclusivo de Enterprise Cloud), así que la barrera principal para crear es el hook `guard-commands.sh`. Lo del lado de GitHub se configura una vez, aquí. Corre los comandos en tu terminal, con tu cuenta `leon2995`, que es owner.
 
-**a. Ya configurado.**
-- **2026-09-29:**
-  - En Member privileges, los miembros no pueden cambiar la visibilidad de los repos ni borrarlos o transferirlos.
-  - El equipo `forja` es secreto y `talos-bot-leon` es miembro. `talos-bot-leon` es miembro de la organización, no owner.
-- **2026-09-30:**
+**a. Ya configurado (2026-09-29, hora local).**
+- En Member privileges, los miembros no pueden cambiar la visibilidad de los repos ni borrarlos o transferirlos.
+- El equipo `forja` es secreto y `talos-bot-leon` es miembro. `talos-bot-leon` es miembro de la organización, no owner.
+- Más tarde, ese mismo día:
   - Los rulesets `main` (id 24221749) y `staging` (id 24221758) están activos y verificados con el paso 3 de b.
   - Pages está desactivado para miembros.
   - El presupuesto de Actions tiene Stop usage.
@@ -307,7 +306,7 @@ gh api orgs/finconnect-com/actions/permissions/workflow
 
 - **Presupuesto de Actions.** Los repos privados consumen minutos. Team incluye 3.000 al mes, y el excedente se cobra. En Billing & Licensing → Budgets and alerts, crea un presupuesto para Actions con "Stop usage when budget limit is reached".
 - **Railway.** Instala la GitHub App de Railway en `finconnect-com` con acceso a All repositories. Con All repositories solo la puede instalar un owner. Con Only select repositories tendrías que agregar a mano cada repo que cree el agente.
-- **GitHub Apps de los admins de repo.** El bot es admin de los repos que crea. En Member privileges, revisa si los admins de repo pueden instalar GitHub Apps en sus repos y desactívalo: una app instalada ahí tendría acceso al código. El hook no lo ve, porque se hace desde la web. Confirma el nombre exacto de la opción en la pantalla.
+- **Pendiente de verificar: GitHub Apps de los admins de repo.** El bot es admin de los repos que crea, y una app instalada en uno de ellos tendría acceso al código. El hook no lo ve, porque la instalación se hace desde la web. No se verificó contra GitHub si el plan Team tiene un ajuste que impida a los admins de repo instalar GitHub Apps. Revísalo en Settings → Member privileges y, si existe, desactívalo.
 
 **d. Validación con un repo de prueba.** Hazla una sola vez, con A2 y B ya en `main` y antes del primer proyecto real. El agente corre `/crear-repo prueba-rulesets`, en una sesión interactiva del repo del framework, y crea `finconnect-com/prueba-rulesets`.
 - **Sin Fase 1 ni Railway:** tu pedido explícito reemplaza el sí de la Fase 1, y los pasos de Railway no se corren.
