@@ -1091,13 +1091,14 @@ for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 
   '--base main' 'git -C <ruta> push origin origin/main:refs/heads/staging' 'ESPERANDO OK' 'HUMAN' \
   'Solo en una sesión interactiva' 'test -f instalador/instalar.sh' 'crear .claude/identidad-agente.txt' \
   'rama staging: crear' '<scratchpad>' 'nunca con `mktemp`' 'docs/adr/0001-' '.pipeline/modo' \
-  'no corras las secciones 1 y 2' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
+  'la sección Agente de los pasos manuales' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
   "-d '<descripción>'" 'un vencimiento del timeout no es un fallo'; do
   chequeo pasa "crear-repo.md: $t" tiene "$t"
 done
 # El paso 0 de /crear-repo reconoce el instalador nuevo (B) por su salida. Con el instalador de este
-# repo, sobre una simulación con origin de la organización y un commit, tiene que cortar. B invierte
-# este chequeo. Solo en el repo del framework, que tiene instalador/.
+# repo, sobre una simulación con origin de la organización y un commit, tiene que pasar (antes de B
+# cortaba: el v1 no generaba la identidad, creaba staging local y emitía la nota del dueño). Solo en el
+# repo del framework, que tiene instalador/.
 if [ -f "$repo/instalador/instalar.sh" ]; then
   sim="$tmp/sim-app"
   git init -q "$sim" 2>/dev/null
@@ -1109,7 +1110,7 @@ if [ -f "$repo/instalador/instalar.sh" ]; then
       ! printf '%s\n' "$salida_sim" | grep -qx 'rama staging: crear' &&
       ! printf '%s\n' "$salida_sim" | grep -q '^nota:'
   }
-  chequeo falla 'el paso 0 de /crear-repo corta con el instalador actual (v1, antes de B)' paso0_pasa
+  chequeo pasa 'el paso 0 de /crear-repo pasa con el instalador actual (B)' paso0_pasa
 else
   echo "omitido: no hay instalador/ (repo instalado), paso 0 de /crear-repo"
 fi
