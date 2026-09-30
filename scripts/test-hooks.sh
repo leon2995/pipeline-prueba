@@ -556,6 +556,7 @@ repo_prueba() {
 repo_prueba "$tmp/dir con espacio" https://github.com/o/r.git
 repo_prueba "$tmp/dir-ssh" git@github.com:o/r.git
 repo_prueba "$tmp/con-codeowners" https://github.com/o/r.git con-codeowners
+repo_prueba "$tmp/con codeowners" https://github.com/o/r.git con-codeowners
 repo_prueba "$tmp/sin-codeowners" https://github.com/o/r.git
 
 echo "== guard-commands.sh: identidad del bot $bot (C4), con copia del hook y gh falso"
@@ -937,6 +938,12 @@ echo "-- rama staging: solo desde origin/main y con CODEOWNERS (C7)"
 g permite "git -C $tmp/con-codeowners push origin origin/main:refs/heads/staging"
 g permite "git -C $tmp/con-codeowners push origin origin/main:staging"
 g permite "git -C \"$tmp/con-codeowners\" push origin 'origin/main:refs/heads/staging'"
+# A1b: con un espacio en la ruta, y con CDPATH en el entorno (el hook entra con cd, no con -C).
+g permite "git -C \"$tmp/con codeowners\" push origin origin/main:refs/heads/staging"
+# con-codeowners no existe en el directorio de la suite: git -C fallaría, y el hook no debe hallarlo por CDPATH.
+extra_env=(CDPATH="$tmp")
+g bloquea "git -C con-codeowners push origin origin/main:refs/heads/staging" '(staging)'
+extra_env=()
 for c in \
   "git -C $tmp/sin-codeowners push origin origin/main:refs/heads/staging" \
   "git -C $tmp/sin-codeowners push origin origin/main:staging" \
