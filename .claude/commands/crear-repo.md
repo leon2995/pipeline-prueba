@@ -97,7 +97,7 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    - **Qué va en `<archivo>`:** escribe con Write el mensaje del commit y el cuerpo del PR, cada uno en su archivo dentro de `<scratchpad>`. El cuerpo lleva:
      - el SHA de la fuente;
      - la lista de archivos que creó el instalador;
-     - la sección Agente de los pasos manuales que imprimió el instalador (`settings.local.json`).
+     - la sección Agente de los pasos manuales que imprimió el instalador (`settings.local.json`), sin la línea con la ruta de la configuración de gh del bot. Esa ruta es local de Leonardo y no va a GitHub; él la tiene en su terminal.
    - **Los checks:** `gh pr checks` puede responder "no checks reported" justo después de crear el PR; espera un poco y repítelo. Si un check falla, HUMAN.
    - **El estado del PR:** con los checks en verde, el último comando debe decir `blocked`, porque el PR espera la aprobación de Leonardo. `main` todavía no tiene `CODEOWNERS`, así que GitHub no la pide como code owner: la exige el ruleset. Por eso se lo agrega como revisor.
 
