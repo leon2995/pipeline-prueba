@@ -63,6 +63,8 @@ bloqueo() { echo "Bloqueado por protocolo ($1): $2" >&2; exit 2; }
 # el grupo y el subcomando (gh -R o/r pr review, gh pr -R o/r review, gh --hostname x auth token).
 I='(^|[;&|( `])'
 F='( +-[^ ;&|]+( +[^- ;&|][^ ;&|]*)?)*'
+# GIT: git como palabra, también con ruta (/usr/bin/git, C:\...\git) o como git.exe (A1).
+GIT='([^ ;&|]*[/\\])?git(\.exe)?'
 sin_plantilla=${cmd//settings.local.example/}
 if printf '%s' "$sin_plantilla" | grep -Eq 'GH_TOKEN|GITHUB_TOKEN|gh[pousr]_|github_pat_|oauth_token|settings\.local|\.talos-gh|hosts\.yml'; then
   bloqueo credenciales "el comando nombra un token o un archivo de credenciales (GH_TOKEN, GITHUB_TOKEN, oauth_token, prefijos ghp_ y similares, settings.local.json, ~/.talos-gh). Nómbralos en texto, nunca en un comando."
@@ -313,7 +315,7 @@ leer_push() {
 if [[ ${cmd,,} == *push*staging* ]]; then
   while IFS= read -r seg; do
     [[ $seg == *push* ]] || continue
-    printf '%s\n' " $seg " | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)" || continue
+    printf '%s\n' " $seg " | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq "${I}$GIT$F +push([^[:alnum:]_-]|\$)" || continue
     leer_push "$seg"
     case $? in
       0) ;;
@@ -473,11 +475,11 @@ if [ -e "$archivo_identidad" ]; then
   while IFS= read -r seg; do
     [ -n "${seg//[[:space:]]/}" ] || continue
     s=" $seg "
-    if printf '%s\n' "$s" | grep -Eq "${I}git$F +(commit|push)([^[:alnum:]_-]|\$)"; then
+    if printf '%s\n' "$s" | grep -Eq "${I}$GIT$F +(commit|push)([^[:alnum:]_-]|\$)"; then
       escribe_git=1
       # El texto entre comillas no es una invocación: un "git push" dentro de un -m o un --title no
       # cuenta como push.
-      if printf '%s\n' "$s" | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq "${I}git$F +push([^[:alnum:]_-]|\$)"; then
+      if printf '%s\n' "$s" | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" | grep -Eq "${I}$GIT$F +push([^[:alnum:]_-]|\$)"; then
         empuja=1
         pushes+=("$seg")
       fi
@@ -535,7 +537,7 @@ if [ -e "$archivo_identidad" ]; then
           *) bloqueo identidad "no pude leer el git push ($p); escríbelo como git push <remoto> <rama>." ;;
         esac
         [ -z "$dir_c" ] || [ -d "$dir_c" ] ||
-          bloqueo identidad "el directorio de git -C ($dir_c) no existe; no se puede leer su remoto."
+          bloqueo identidad "el directorio de git -C ($dir_c) no existe; no se puede leer su remoto. Usa la ruta literal, sin variables ni ~."
         remoto=${remoto:-$repo}
         remoto=${remoto:-origin}
         case "$remoto" in
@@ -568,8 +570,8 @@ fi
 # tras $( ( o `). Red de seguridad: en el texto sin comillas ni barras invertidas se cuentan las
 # apariciones de gh ... repo create|new|edit|fork|delete|deploy-key, de gh ... api y de
 # gh ... alias|extension; si alguna supera las invocaciones leídas (bash -c "...", "$(...)"), se
-# bloquea. Costo aceptado: ese texto dentro de un --title o un -m también se bloquea (usa --body-file
-# y -F).
+# bloquea. Costo aceptado: ese texto dentro de un --title, un -m o un -f body= también se bloquea (usa --body-file,
+# git commit -F o gh api -F body=@archivo).
 # Límites (fuera del modelo de amenaza): alias y extensiones ya instalados en la configuración de gh
 # del bot (hoy solo el alias co de fábrica), GH_HOST o GH_REPO exportados en un comando anterior, y
 # eval o bash -c con texto armado en variables.
@@ -579,9 +581,9 @@ g_gh='(^|[^[:alnum:]_.-])gh(\.exe)?( +-[^ ]+( +[^- ][^ ]*)?)*'
 re_repo="$g_gh +repo( +-[^ ]+( +[^- ][^ ]*)?)* +(create|new|edit|fork|delete|deploy-key)([^[:alnum:]_-]|\$)"
 re_api="$g_gh +api([^[:alnum:]_-]|\$)"
 re_ext="$g_gh +(alias|extensions?|ext)([^[:alnum:]_-]|\$)"
-# plano <texto>: deja en pl el texto sin comillas ni barras invertidas, con tabs y saltos de línea
-# como espacios.
-plano() { pl=${1//[\"\'\\]/}; pl=${pl//[$'\n\t\r']/ }; }
+# plano <texto>: deja en pl el texto sin comillas, con las barras invertidas como / (así una ruta de
+# Windows a gh.exe sigue precedida por un separador) y con tabs y saltos de línea como espacios.
+plano() { pl=${1//[\"\']/}; pl=${pl//\\//}; pl=${pl//[$'\n\t\r']/ }; }
 # cuenta <texto> <regex>: deja en cnt cuántas apariciones sin solaparse hay.
 cuenta() {
   local s=$1
@@ -721,15 +723,14 @@ revisar_edit() {
 }
 # revisar_api <segmento> <args>: gh api de escritura (C4).
 revisar_api() {
-  local seg=$1 a metodo="" campos=0 archivo=0 sigue="" endpoint="" npos=0 e
-  local -a p
-  shift
+  local a metodo="" campos=0 archivo=0 sigue="" endpoint="" npos=0 e v
+  local -a p queries=()
   for a in "$@"; do case "$a" in --help|-h) return 0 ;; esac; done
   for a in "$@"; do
     if [ -n "$sigue" ]; then
       case "$sigue" in
         metodo) metodo=$a ;;
-        campo) case "$a" in query=@*) archivo=1 ;; esac ;;
+        campo) case "$a" in query=*) queries+=("${a#query=}") ;; esac ;;
       esac
       sigue=""
       continue
@@ -741,8 +742,8 @@ revisar_api() {
       -X*) metodo=${a#-X} ;;
       --method=*) metodo=${a#--method=} ;;
       -f|-F|--field|--raw-field) campos=1; sigue=campo ;;
-      -[fF]*) campos=1; case "$a" in -[fF]query=@*) archivo=1 ;; esac ;;
-      --field=*|--raw-field=*) campos=1; case "$a" in *=query=@*) archivo=1 ;; esac ;;
+      -[fF]*) campos=1; v=${a#-?}; case "$v" in query=*) queries+=("${v#query=}") ;; esac ;;
+      --field=*|--raw-field=*) campos=1; v=${a#*=}; case "$v" in query=*) queries+=("${v#query=}") ;; esac ;;
       --input) campos=1; archivo=1; sigue=valor ;;
       --input=*) campos=1; archivo=1 ;;
       -H|--header|-q|--jq|-t|--template|--hostname|--cache|-p|--preview) sigue=valor ;;
@@ -756,8 +757,17 @@ revisar_api() {
   e=${e%%\?*}
   e=${e%/}
   if [ "$e" = graphql ]; then
-    { [[ ${seg,,} == *mutation* ]] || [ "$archivo" = 1 ]; } &&
-      bloqueo repos "gh api graphql con una mutation, o con la query en un archivo que el hook no ve: el pipeline no usa mutations de GraphQL."
+    # La mutation se busca en todo el comando: una query armada en una variable antes (Q=...;) no
+    # está en el segmento. Una query que el hook no ve (archivo, variable, $(...) o backticks) se
+    # bloquea.
+    [[ ${cmd_c,,} == *mutation* ]] &&
+      bloqueo repos "gh api graphql con una mutation: el pipeline no usa mutations de GraphQL."
+    [ "$archivo" = 1 ] && bloqueo repos "gh api graphql --input: el hook no ve la query."
+    for v in ${queries[@]+"${queries[@]}"}; do
+      case "$v" in
+        @*|\$*|*\`*) bloqueo repos "gh api graphql con la query en un archivo, una variable, \$(...) o backticks: el hook no la ve. Escríbela literal con -f query='...'." ;;
+      esac
+    done
     return 0
   fi
   # Escritura: el último método no es GET o, sin método, hay campos (implican POST).
@@ -765,10 +775,14 @@ revisar_api() {
   sin_host "gh api de escritura"
   { [ "$npos" = 1 ] && [ -n "$e" ] && [[ $endpoint != *[\$\`]* ]]; } ||
     bloqueo repos "no pude leer el endpoint de este gh api de escritura (ninguno, varios o con \$ o backticks)."
+  # Formas raras del endpoint (otro esquema o puerto, // o una / de más): no se pueden comparar con
+  # la lista, se bloquean.
+  { [[ $e != *://* && $e != *//* && $e != /* && $e != *:* ]]; } ||
+    bloqueo repos "no pude leer el endpoint de este gh api de escritura ($endpoint); escríbelo como repos/<dueño>/<repo>/..., sin host ni //."
   IFS=/ read -r -a p <<< "$e"
   case "${p[0]}" in
-    user) case "$e" in user/repos|user/codespaces/*/publish) bloqueo repos "gh api $e crea un repo fuera de $org." ;; esac ;;
-    orgs) bloqueo repos "el agente no escribe en la configuración de la organización (gh api $e): equipos, repos, rulesets y ajustes los maneja Leonardo." ;;
+    user) case "$e" in user/repos|user/codespaces/*/publish) bloqueo repos "gh api $e crea un repo fuera de ${org:-la organización}." ;; esac ;;
+    orgs|teams) bloqueo repos "el agente no escribe en la configuración de la organización ni de sus equipos (gh api $e): equipos, repos, rulesets y ajustes los maneja Leonardo." ;;
     repos)
       [ "${#p[@]}" -gt 3 ] ||
         bloqueo repos "gh api de escritura sobre el repo ($e) cambia su visibilidad, nombre o dueño, o lo borra; usa gh repo edit con sus flags permitidos."
@@ -776,61 +790,81 @@ revisar_api() {
         generate|forks|transfer) bloqueo repos "gh api $e crea o mueve un repo fuera del flujo de gh repo create." ;;
         pages|collaborators|invitations|keys|hooks|rulesets) bloqueo repos "gh api $e abre el repo a terceros o cambia sus reglas; lo hace Leonardo." ;;
         git) [ "${p[4]:-}" = refs ] && bloqueo repos "gh api $e crea, mueve o borra ramas por API; usa git push (y staging solo desde origin/main)." ;;
-        branches) case "${p[5]:-}" in rename|protection) bloqueo repos "gh api $e renombra una rama o cambia su protección; lo hace Leonardo." ;; esac ;;
+        # El nombre de la rama puede tener / (feat/x): se mira el final y no la posición.
+        branches) case "$e" in */rename|*/protection|*/protection/*) bloqueo repos "gh api $e renombra una rama o cambia su protección; lo hace Leonardo." ;; esac ;;
       esac ;;
   esac
   return 0
 }
+# revisar_deploy_key <args>: gh repo deploy-key. Solo pasan list, delete y la ayuda; -R/--repo puede
+# ir antes del subcomando (C3).
+revisar_deploy_key() {
+  local a sigue=0
+  for a in "$@"; do case "$a" in --help|-h) return 0 ;; esac; done
+  for a in "$@"; do
+    if [ "$sigue" = 1 ]; then sigue=0; continue; fi
+    case "$a" in
+      -R|--repo) sigue=1 ;;
+      -*) ;;
+      list|delete) return 0 ;;
+      *) break ;;
+    esac
+  done
+  bloqueo repos "gh repo deploy-key solo con list o delete: add le da acceso al repo a una llave externa; lo hace Leonardo."
+}
 if [[ $cmd =~ $re_gh ]]; then
-  plano "$cmd"
+  # Continuación de línea (\ y salto de línea): bash la junta antes de correr el comando.
+  cmd_c=${cmd//$'\\\r\n'/ }
+  cmd_c=${cmd_c//$'\\\n'/ }
+  plano "$cmd_c"
   cuenta "$pl" "$re_repo"; net_repo=$cnt
   cuenta "$pl" "$re_api"; net_api=$cnt
   cuenta "$pl" "$re_ext"; net_ext=$cnt
   n_repo=0 n_api=0 n_ext=0 n_create=0
-  if [ $((net_repo + net_api + net_ext)) -gt 0 ]; then
-    leer_conf
-    partir "$(printf '%s' "$cmd" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g')"
-    for seg in "${segs[@]}"; do
+  leer_conf
+  # Se analizan todos los segmentos donde aparece la palabra gh, no solo los que calzan con la red
+  # textual: el filtro no puede ser más estrecho que el analizador.
+  partir "$(printf '%s' "$cmd_c" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g')"
+  for seg in "${segs[@]}"; do
+    [[ $seg =~ $re_gh ]] || continue
+    if ! lista=$(printf '%s' "$seg" | xargs printf '%s\n' 2>/dev/null); then
       plano "$seg"
       [[ $pl =~ $re_repo || $pl =~ $re_api || $pl =~ $re_ext ]] || continue
-      lista=$(printf '%s' "$seg" | xargs printf '%s\n' 2>/dev/null) ||
-        bloqueo repos "no pude leer los argumentos de gh (¿comillas sin cerrar o un salto de línea dentro de comillas?); escribe el comando en una sola línea."
-      toks=()
-      while IFS= read -r t; do toks+=("$t"); done <<< "$lista"
-      # Cierre de $(...), (...) o `...` pegado a la última palabra.
-      if [ "${#toks[@]}" -gt 0 ]; then
-        ult=$((${#toks[@]} - 1))
-        t=${toks[ult]%\`}
-        t=${t%\)}
-        if [ -n "$t" ]; then toks[ult]=$t; else unset "toks[$ult]"; fi
-      fi
-      leer_gh || continue
-      case "$gh_sub" in
-        repo)
-          rsub=${gh_args[0]:-}
-          rargs=("${gh_args[@]:1}")
-          case "$rsub" in
-            create|new) n_repo=$((n_repo + 1)); n_create=$((n_create + 1)); revisar_create ${rargs[@]+"${rargs[@]}"} ;;
-            edit) n_repo=$((n_repo + 1)); sin_host "gh repo edit"; revisar_edit ${rargs[@]+"${rargs[@]}"} ;;
-            fork) n_repo=$((n_repo + 1)); bloqueo repos "gh repo fork crea un repo con la visibilidad del original (público si el original lo es), también dentro de la organización." ;;
-            delete) n_repo=$((n_repo + 1)); bloqueo repos "gh repo delete: borrar un repo requiere el OK de Leonardo, y lo hace él." ;;
-            deploy-key)
-              n_repo=$((n_repo + 1))
-              [ "${rargs[0]:-}" = add ] && bloqueo repos "gh repo deploy-key add le da acceso al repo a una llave externa; lo hace Leonardo." ;;
-          esac ;;
-        api) n_api=$((n_api + 1)); revisar_api "$seg" ${gh_args[@]+"${gh_args[@]}"} ;;
-        alias)
-          n_ext=$((n_ext + 1))
-          case "${gh_args[0]:-}" in set|import) bloqueo repos "gh alias set o import: un alias esconde cualquier comando de gh de este hook." ;; esac ;;
-        extension|extensions|ext)
-          n_ext=$((n_ext + 1))
-          case "${gh_args[0]:-}" in install|upgrade|exec) bloqueo repos "gh extension install, upgrade o exec corren código que este hook no ve." ;; esac ;;
-      esac
-    done
-  fi
+      bloqueo repos "no pude leer los argumentos de gh (¿comillas sin cerrar o un salto de línea dentro de comillas?); escribe el comando en una sola línea."
+    fi
+    toks=()
+    while IFS= read -r t; do toks+=("$t"); done <<< "$lista"
+    # Cierre de $(...), (...) o `...` pegado a la última palabra.
+    if [ "${#toks[@]}" -gt 0 ]; then
+      ult=$((${#toks[@]} - 1))
+      t=${toks[ult]%\`}
+      t=${t%\)}
+      if [ -n "$t" ]; then toks[ult]=$t; else unset "toks[$ult]"; fi
+    fi
+    leer_gh || continue
+    case "$gh_sub" in
+      repo)
+        rsub=${gh_args[0]:-}
+        rargs=("${gh_args[@]:1}")
+        case "$rsub" in
+          create|new) n_repo=$((n_repo + 1)); n_create=$((n_create + 1)); revisar_create ${rargs[@]+"${rargs[@]}"} ;;
+          edit) n_repo=$((n_repo + 1)); sin_host "gh repo edit"; revisar_edit ${rargs[@]+"${rargs[@]}"} ;;
+          fork) n_repo=$((n_repo + 1)); bloqueo repos "gh repo fork crea un repo con la visibilidad del original (público si el original lo es), también dentro de la organización." ;;
+          delete) n_repo=$((n_repo + 1)); bloqueo repos "gh repo delete: borrar un repo requiere el OK de Leonardo, y lo hace él." ;;
+          deploy-key) n_repo=$((n_repo + 1)); revisar_deploy_key ${rargs[@]+"${rargs[@]}"} ;;
+        esac ;;
+      api) n_api=$((n_api + 1)); revisar_api ${gh_args[@]+"${gh_args[@]}"} ;;
+      alias)
+        n_ext=$((n_ext + 1))
+        case "${gh_args[0]:-}" in set|import) bloqueo repos "gh alias set o import: un alias esconde cualquier comando de gh de este hook." ;; esac ;;
+      extension|extensions|ext)
+        n_ext=$((n_ext + 1))
+        case "${gh_args[0]:-}" in install|upgrade|exec) bloqueo repos "gh extension install, upgrade o exec corren código que este hook no ve." ;; esac ;;
+    esac
+  done
   [ "$n_create" -le 1 ] || bloqueo repos "una sola creación de repo por comando."
   { [ "$net_repo" -le "$n_repo" ] && [ "$net_api" -le "$n_api" ] && [ "$net_ext" -le "$n_ext" ]; } ||
-    bloqueo repos "hay un gh repo, gh api, gh alias o gh extension que no pude leer (dentro de comillas, bash -c o \"\$(...)\", o en el texto de un --title o un -m). Escribe cada uno como comando propio y los textos con --body-file o -F."
+    bloqueo repos "hay un gh repo, gh api, gh alias o gh extension que no pude leer (dentro de comillas, bash -c o \"\$(...)\", o en el texto de un --title, un -m o un -f body=). Escribe cada uno como comando propio, y los textos con --body-file, git commit -F o gh api -F body=@archivo."
 fi
 
 # gh pr merge: solo a staging, con número de PR explícito, un merge por comando, sin --admin,
