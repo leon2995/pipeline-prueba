@@ -54,7 +54,7 @@
   - La primera corrida local del test-writer no sirvió como medida: el disco C: estaba lleno. Por eso la validación se hizo en CI.
 - **Engineer, en Windows:** `bash tests/acceptance/test-instalador.sh` da `94 ok, 0 fallos`, y `bash tests/unit/test-instalar.sh` da `155 ok, 0 fallos`.
 - **CI del push en `40c0692`:** pendiente.
-- **Suite de hooks completa en Windows sobre `40c0692`:** en curso.
+- **Suite de hooks completa en Windows (Git Bash) sobre `22dff6f`:** `1054 ok, 0 fallos`, rc=0 y 1960 s. La corrida de `40c0692` se perdió cuando se liberó espacio en disco; la repetí sobre `22dff6f`, que ya tiene las correcciones del auditor. Después de `22dff6f` solo cambió un texto de `crear-repo.md` y se sumó un chequeo de frase. El CI de `9b4d5f5` da `1055 ok, 0 fallos` con gawk y con mawk, y `node` da 94 y 155 ok.
 
 ## Notas del engineer
 
