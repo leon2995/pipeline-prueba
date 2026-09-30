@@ -4,12 +4,15 @@
 # Solo archivos, no carpetas. # al comienzo de la línea inicia un comentario; se ignoran las
 # líneas vacías y los espacios de los extremos. Toda ruta tiene que existir en la fuente.
 #
-# Nunca van aquí: .claude/settings.local.json, .claude/identidad-agente.txt, .claude/worktrees/,
-# el estado de .pipeline/ de este repo (criterios, evidencia, veredictos, test-hooks-salida.txt,
-# lecciones-pendientes.md, plan.json, modo), tests/, instalador/, package.json, package-lock.json,
-# SETUP.md, README.md, railway.json y docs/FASE-2-HERMES.md.
-# Los archivos que genera el instalador (.pipeline/lecciones-pendientes.md, .pipeline/plan.json,
-# .pipeline/criterios-T1.md y .railway/railway.ts) salen de instalador/plantillas/.
+# Nunca van aquí: .claude/settings.local.json, .claude/worktrees/, el estado de .pipeline/ de este
+# repo (criterios, evidencia, veredictos, test-hooks-salida.txt, lecciones-pendientes.md, plan.json,
+# modo), tests/, instalador/, package.json, package-lock.json, SETUP.md, README.md, railway.json y
+# docs/FASE-2-HERMES.md.
+# Los archivos que genera el instalador tampoco se listan (una ruta generada en el manifiesto es un
+# error de la fuente): .pipeline/lecciones-pendientes.md, .pipeline/plan.json, .pipeline/criterios-T1.md
+# y .railway/railway.ts salen de instalador/plantillas/. Con ellos va ahora .claude/identidad-agente.txt:
+# ya no es de los que nunca se copian sin más, sino un archivo generado, con una sola línea, el bot de
+# .claude/pipeline.conf. El manifiesto sigue sin listarlo.
 
 # Protocolo, memoria y git
 CLAUDE.md
@@ -22,9 +25,11 @@ LESSONS.md
 .claude/agents/engineer.md
 .claude/agents/test-writer.md
 .claude/commands/audit-codex.md
+.claude/commands/crear-repo.md
 .claude/commands/verificar-deploy.md
 .claude/prompts/auditor-codex.md
 .claude/hooks/_lib.sh
+.claude/hooks/check-public-repos.sh
 .claude/hooks/guard-commands.sh
 .claude/hooks/only-acceptance-tests.sh
 .claude/hooks/protect-acceptance-tests.sh

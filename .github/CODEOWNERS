@@ -10,3 +10,5 @@ LESSONS.md @leon2995
 /scripts/run-task.sh @leon2995
 /scripts/resume-task.sh @leon2995
 /scripts/watch-deploy.sh @leon2995
+/.gitleaksignore @leon2995
+/.gitleaks.toml @leon2995

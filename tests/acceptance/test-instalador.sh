@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Pruebas de aceptación del instalador v1 (T3b): instalador/instalar.sh copia el framework a
-# otro repo sin pisar archivos, crea la rama `staging`, genera `.railway/railway.ts` e imprime
-# los pasos manuales. Ver .pipeline/criterios-T3b.md (C1 a C10).
+# Pruebas de aceptación del instalador (T3b y subtarea B): instalador/instalar.sh copia el framework
+# a otro repo sin pisar archivos, genera `.railway/railway.ts` y `.claude/identidad-agente.txt`,
+# no crea ramas locales e imprime los pasos manuales. Ver .pipeline/criterios-T3b.md (C1 a C10) y
+# .pipeline/criterios-B.md (B1 a B6, B8). Las secciones "B1" a "B6" llevan las pruebas nuevas de B;
+# C4, C6 y C7 se reescribieron para el comportamiento nuevo.
 #
 # Uso: bash tests/acceptance/test-instalador.sh
 #
@@ -23,6 +25,9 @@ trap 'rm -rf "$tmp"' EXIT
 conf() { sed -n "s/^$1=//p" "$repo/.claude/pipeline.conf" 2>/dev/null | tr -d '\r' | head -1; }
 dueno_marco=$(conf dueno)
 bot_marco=$(conf bot)
+org_marco=$(conf org)
+# URL de un repo de la organización (B3, B6).
+url_org="https://github.com/$org_marco/app.git"
 
 # -- gh y railway falsos: registran cualquier invocación; el instalador nunca debe llamarlos (C6).
 mkdir -p "$tmp/bin"
@@ -50,17 +55,19 @@ export PATH="$tmp/bin:$PATH"
 contador=0
 sig() { contador=$((contador + 1)); printf '%03d' "$contador"; }
 
-# nuevo_repo <nombre> [--sin-origen] [--rama NOMBRE]: crea un repo git en un directorio temporal
-# (el nombre puede tener espacios, C10) con origin https://github.com/acme/demo.git, salvo que se
-# pida --sin-origen. Imprime la ruta por stdout.
+# nuevo_repo <nombre> [--sin-origen] [--rama NOMBRE] [--origin URL]: crea un repo git en un
+# directorio temporal (el nombre puede tener espacios, C10) con origin https://github.com/acme/demo.git,
+# salvo que se pida otro con --origin o --sin-origen. Imprime la ruta por stdout. Ojo: se llama dentro
+# de $(...), así que el contador de sig() no avanza; cada llamada necesita un <nombre> único.
 nuevo_repo() {
   local nombre=$1
   shift
-  local rama=main sin_origen=0
+  local rama=main sin_origen=0 origin=https://github.com/acme/demo.git
   while [ $# -gt 0 ]; do
     case "$1" in
       --sin-origen) sin_origen=1; shift ;;
       --rama) rama=$2; shift 2 ;;
+      --origin) origin=$2; shift 2 ;;
       *) shift ;;
     esac
   done
@@ -68,7 +75,7 @@ nuevo_repo() {
   mkdir -p "$ruta"
   git -C "$ruta" init -q -b "$rama"
   if [ "$sin_origen" -eq 0 ]; then
-    git -C "$ruta" remote add origin https://github.com/acme/demo.git
+    git -C "$ruta" remote add origin "$origin"
   fi
   printf '%s' "$ruta"
 }
@@ -99,14 +106,71 @@ huella() {
   )
 }
 
-# ejecutar <args...>: corre el instalador real y deja SALIDA, ERRSAL y CODIGO.
-ejecutar() {
-  local ef
+# ejecutar_con <instalar.sh> <args...>: corre ese instalador y deja SALIDA, ERRSAL y CODIGO.
+ejecutar_con() {
+  local inst=$1 ef
+  shift
   ef=$(mktemp "$tmp/stderr.XXXXXX")
-  SALIDA=$(bash "$instalador" "$@" 2>"$ef")
+  SALIDA=$(bash "$inst" "$@" 2>"$ef")
   CODIGO=$?
   ERRSAL=$(cat "$ef" 2>/dev/null)
   rm -f "$ef"
+}
+
+# ejecutar <args...>: corre el instalador real y deja SALIDA, ERRSAL y CODIGO.
+ejecutar() {
+  ejecutar_con "$instalador" "$@"
+}
+
+# fuente_falsa <nombre único> [clave=valor]...: copia de instalador/ con un manifiesto mínimo (uno.txt)
+# y un pipeline.conf con esas claves cambiadas. Imprime la ruta de la fuente. Sirve para comprobar que
+# el instalador lee bot, org y dueno de pipeline.conf y no los fija a mano.
+fuente_falsa() {
+  local f="$tmp/fuentes/$1" par
+  shift
+  mkdir -p "$f/.claude" "$f/instalador"
+  cp -r "$repo/instalador/." "$f/instalador/"
+  cp "$repo/.claude/pipeline.conf" "$f/.claude/pipeline.conf"
+  for par in "$@"; do
+    sed -i "s/^${par%%=*}=.*/${par%%=*}=${par#*=}/" "$f/.claude/pipeline.conf"
+  done
+  escribir "$f/uno.txt" "contenido uno"
+  printf '%s\n' '# manifiesto de prueba' 'uno.txt' > "$f/instalador/manifiesto.txt"
+  printf '%s' "$f"
+}
+
+# refs <ruta>: todas las referencias del repo con su objeto (ramas locales, remotas y etiquetas).
+refs() {
+  git -C "$1" for-each-ref --format='%(refname) %(objectname)' 2>/dev/null
+}
+
+# pasos <salida>: lo que sigue a la línea "== Pasos manuales", incluida ella.
+pasos() {
+  printf '%s\n' "$1" | sed -n '/^== Pasos manuales/,$p'
+}
+
+# Los helpers que buscan no usan grep -q: con pipefail, un grep -q que cierra la tubería antes de
+# tiempo hace fallar a printf (SIGPIPE) y da un falso "no está".
+
+# linea_de <texto> <regex>: número de la primera línea que cumple la expresión (sin distinguir
+# mayúsculas); vacío si ninguna.
+linea_de() {
+  printf '%s\n' "$1" | grep -inE -- "$2" | head -n1 | cut -d: -f1
+}
+
+# hay_linea <texto> <regex>: 0 si alguna línea cumple la expresión (grep -E).
+hay_linea() {
+  printf '%s\n' "$1" | grep -E -- "$2" > /dev/null
+}
+
+# hay_linea_i: como hay_linea, sin distinguir mayúsculas.
+hay_linea_i() {
+  printf '%s\n' "$1" | grep -iE -- "$2" > /dev/null
+}
+
+# linea_exacta <texto> <línea>: 0 si el texto tiene esa línea completa, igual (sin CR).
+linea_exacta() {
+  printf '%s\n' "$1" | tr -d '\r' | grep -Fx -- "$2" > /dev/null
 }
 
 # contiene <texto> <subtexto>: sale 0 si <texto> contiene <subtexto> (comparación literal).
@@ -427,6 +491,30 @@ caso "C4: --servicio reemplaza el nombre del servicio sin cambiar el del repo" c
 caso "C4: sin origin, el repo sale del nombre de la carpeta del destino" c4_repo_sin_origen_usa_carpeta
 caso "C4: un archivo generado preexistente cuenta como igual o conflicto según su contenido" c4_generado_existente_igual_y_conflicto
 
+# B8 (C4 reescrito): la lista de generados incluye .claude/identidad-agente.txt.
+c4_lista_de_generados() {
+  local d salida f
+  d=$(nuevo_repo c4-lista-nuevo --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  for f in .pipeline/lecciones-pendientes.md .pipeline/plan.json .railway/railway.ts .claude/identidad-agente.txt; do
+    linea_exacta "$SALIDA" "crear $f" || { echo "modo nuevo: falta la línea 'crear $f'"; return 1; }
+  done
+  hay_linea "$SALIDA" '^(crear|igual|conflicto) \.pipeline/criterios-T1\.md$' \
+    && { echo "modo nuevo: no debería listar criterios-T1.md"; return 1; }
+
+  d=$(nuevo_repo c4-lista-existente --origin "$url_org")
+  escribir "$d/src/app.py" "print(1)"
+  commit_todo "$d"
+  ejecutar "$d" --aplicar
+  for f in .pipeline/lecciones-pendientes.md .pipeline/plan.json .pipeline/criterios-T1.md .railway/railway.ts .claude/identidad-agente.txt; do
+    linea_exacta "$SALIDA" "crear $f" || { echo "modo existente: falta la línea 'crear $f'"; return 1; }
+    [ -f "$d/$f" ] || { echo "modo existente: no escribió $f"; return 1; }
+  done
+}
+
+caso "C4/B8: la lista de generados incluye .claude/identidad-agente.txt (y criterios-T1.md solo en modo existente)" c4_lista_de_generados
+
 # ===========================================================================
 echo "== C5: modos"
 # ===========================================================================
@@ -511,21 +599,8 @@ caso "C5: --modo fuerza el modo detectado" c5_modo_forzado
 caso "C5: modo existente genera la subtarea T1 y sus criterios, con pistas de manifiestos detectados" c5_existente_genera_t1_y_criterios
 
 # ===========================================================================
-echo "== C6: rama staging"
+echo "== C6: rama staging (el instalador ya no la crea; ver B2)"
 # ===========================================================================
-
-c6_crea_en_head_sin_cambiar_activa() {
-  local d rama_antes head_antes salida
-  d=$(nuevo_repo c6-crear --rama trabajo)
-  commit_todo "$d"
-  rama_antes=$(git -C "$d" branch --show-current)
-  head_antes=$(git -C "$d" rev-parse HEAD)
-  salida=$(bash "$instalador" "$d" --aplicar 2>&1)
-  contiene "$salida" "rama staging: crear" || { echo "no reportó 'rama staging: crear'"; return 1; }
-  git -C "$d" show-ref --verify --quiet refs/heads/staging || { echo "no creó la rama staging"; return 1; }
-  [ "$(git -C "$d" rev-parse staging)" = "$head_antes" ] || { echo "staging no quedó en HEAD"; return 1; }
-  [ "$(git -C "$d" branch --show-current)" = "$rama_antes" ] || { echo "cambió la rama activa"; return 1; }
-}
 
 c6_existente_no_se_toca() {
   local d salida commit_viejo
@@ -537,15 +612,6 @@ c6_existente_no_se_toca() {
   salida=$(bash "$instalador" "$d" --aplicar 2>&1)
   contiene "$salida" "rama staging: existe" || { echo "no reportó 'rama staging: existe'"; return 1; }
   [ "$(git -C "$d" rev-parse staging)" = "$commit_viejo" ] || { echo "movió la rama staging existente"; return 1; }
-}
-
-c6_sin_commits_no_crea() {
-  local d salida
-  d=$(nuevo_repo c6-sin-commits)
-  salida=$(bash "$instalador" "$d" --aplicar 2>&1)
-  contiene "$salida" "rama staging: sin commits" || { echo "no reportó 'rama staging: sin commits'"; return 1; }
-  git -C "$d" show-ref --verify --quiet refs/heads/staging && { echo "creó staging sin commits"; return 1; }
-  return 0
 }
 
 c6_no_toca_el_remoto() {
@@ -572,93 +638,13 @@ c6_no_agrega_commits() {
   [ "$antes" = "$despues" ] || { echo "el instalador agregó commits a main"; return 1; }
 }
 
-caso "C6: con commits y sin staging, crea staging en HEAD sin cambiar la rama activa" c6_crea_en_head_sin_cambiar_activa
 caso "C6: si staging ya existe, no se mueve" c6_existente_no_se_toca
-caso "C6: sin commits, no crea staging" c6_sin_commits_no_crea
 caso "C6: nunca hace push ni fetch (las referencias del remoto no cambian)" c6_no_toca_el_remoto
 caso "C6: nunca agrega commits a la rama activa" c6_no_agrega_commits
 
 # ===========================================================================
-echo "== C7: pasos manuales"
+echo "== C7: pasos manuales (servicio y puerto; el resto de los pasos está en B5)"
 # ===========================================================================
-
-c7_comandos_exactos() {
-  local d salida
-  d=$(nuevo_repo c7-basico --rama trabajo)
-  commit_todo "$d"
-  salida=$(bash "$instalador" "$d" --aplicar 2>&1)
-
-  # 1. Git
-  contiene "$salida" "git push -u origin trabajo staging" || { echo "falta 'git push -u origin trabajo staging'"; return 1; }
-  contiene "$salida" "merge --ff-only" || { echo "falta 'git merge --ff-only'"; return 1; }
-  case "$salida" in
-    *"merge --ff-only"*"trabajo"* | *"trabajo"*"merge --ff-only"*) ;;
-    *) echo "el merge --ff-only no nombra la rama activa (trabajo)"; return 1 ;;
-  esac
-
-  # 2. GitHub
-  contiene "$salida" "gh api -X PUT repos/acme/demo/collaborators/$bot_marco -f permission=push" \
-    || { echo "falta la invitación exacta del bot"; return 1; }
-  contiene "$salida" 'gh api user/repository_invitations' || { echo "falta consultar las invitaciones"; return 1; }
-  contiene "$salida" '$HOME/.talos-gh' || { echo 'falta GH_CONFIG_DIR="$HOME/.talos-gh" al aceptar la invitación'; return 1; }
-  contiene "$salida" "gh api -X PATCH user/repository_invitations/" || { echo "falta aceptar la invitación (PATCH)"; return 1; }
-  contiene "$salida" "gh api -X PUT repos/acme/demo/branches/main/protection --input -" \
-    || { echo "falta la protección exacta de main"; return 1; }
-  contiene "$salida" "gh api -X PUT repos/acme/demo/branches/staging/protection --input -" \
-    || { echo "falta la protección exacta de staging"; return 1; }
-  printf '%s' "$salida" | grep -Eq '"required_approving_review_count"[[:space:]]*:[[:space:]]*1([^0-9]|$)' \
-    || { echo "no encontré 1 aprobación requerida (main)"; return 1; }
-  printf '%s' "$salida" | grep -Eq '"required_approving_review_count"[[:space:]]*:[[:space:]]*0([^0-9]|$)' \
-    || { echo "no encontré 0 aprobaciones requeridas (staging)"; return 1; }
-  contiene "$salida" "require_code_owner_reviews" || { echo "falta require_code_owner_reviews"; return 1; }
-  contiene "$salida" "dismiss_stale_reviews" || { echo "falta dismiss_stale_reviews"; return 1; }
-  contiene "$salida" "enforce_admins" || { echo "falta enforce_admins"; return 1; }
-  contiene "$salida" "secrets" || { echo "falta el check 'secrets'"; return 1; }
-  contiene "$salida" "hooks" || { echo "falta el check 'hooks'"; return 1; }
-  contiene "$salida" "15368" || { echo "falta el app_id 15368"; return 1; }
-  printf '%s' "$salida" | grep -Eq '"allow_force_pushes"[[:space:]]*:[[:space:]]*false' \
-    || { echo "falta allow_force_pushes en false"; return 1; }
-  printf '%s' "$salida" | grep -Eq '"allow_deletions"[[:space:]]*:[[:space:]]*false' \
-    || { echo "falta allow_deletions en false"; return 1; }
-  contiene "$salida" "repos/acme/demo/branches/main/protection" || { echo "falta el GET de protección de main"; return 1; }
-  contiene "$salida" "repos/acme/demo/branches/staging/protection" || { echo "falta el GET de protección de staging"; return 1; }
-
-  # 3. Railway
-  contiene "$salida" "railway add --service demo --repo acme/demo --branch main" || { echo "falta 'railway add'"; return 1; }
-  contiene "$salida" "railway environment new staging --duplicate production --service-config demo source.branch staging" \
-    || { echo "falta 'railway environment new'"; return 1; }
-  contiene "$salida" "railway variable set PORT=8080 --service demo --environment production --skip-deploys" \
-    || { echo "falta la variable PORT en production"; return 1; }
-  contiene "$salida" "railway variable set PORT=8080 --service demo --environment staging --skip-deploys" \
-    || { echo "falta la variable PORT en staging"; return 1; }
-  contiene "$salida" "railway domain --port 8080 --service demo --environment production" \
-    || { echo "falta 'railway domain' en production"; return 1; }
-  contiene "$salida" "railway domain --port 8080 --service demo --environment staging" \
-    || { echo "falta 'railway domain' en staging"; return 1; }
-  contiene "$salida" "npm install --save-dev railway@3.11.0" || { echo "falta instalar el SDK railway@3.11.0"; return 1; }
-  contiene "$salida" "Node 22" || { echo "falta la nota de Node 22"; return 1; }
-  contiene "$salida" "railway environment link production" || { echo "falta 'environment link production'"; return 1; }
-  contiene "$salida" "railway environment link staging" || { echo "falta 'environment link staging'"; return 1; }
-  contiene "$salida" "railway config plan" || { echo "falta 'railway config plan'"; return 1; }
-  contiene "$salida" "railway config apply" || { echo "falta 'railway config apply'"; return 1; }
-
-  # 4. Agente
-  contiene "$salida" ".claude/settings.local.example.json" || { echo "falta nombrar settings.local.example.json"; return 1; }
-  contiene "$salida" ".claude/settings.local.json" || { echo "falta nombrar settings.local.json"; return 1; }
-  contiene "$salida" "GH_CONFIG_DIR" || { echo "falta completar GH_CONFIG_DIR"; return 1; }
-  contiene "$salida" "identidad-agente.txt" || { echo "falta crear identidad-agente.txt"; return 1; }
-  contiene "$salida" "$bot_marco" || { echo "falta nombrar al bot ($bot_marco)"; return 1; }
-
-  # placeholders y tokens
-  contiene "$salida" "<dueño>" && { echo "quedó <dueño> sin reemplazar"; return 1; }
-  contiene "$salida" "<repo>" && { echo "quedó <repo> sin reemplazar"; return 1; }
-  contiene "$salida" "<servicio>" && { echo "quedó <servicio> sin reemplazar"; return 1; }
-  contiene "$salida" "<puerto>" && { echo "quedó <puerto> sin reemplazar"; return 1; }
-  contiene "$salida" "ghp_" && { echo "imprime algo con forma de token (ghp_)"; return 1; }
-  contiene "$salida" "GH_TOKEN=" && { echo "imprime GH_TOKEN"; return 1; }
-  contiene "$salida" "gh auth token" && { echo "pide imprimir el token"; return 1; }
-  return 0
-}
 
 c7_servicio_y_puerto_reemplazados() {
   local d salida
@@ -685,9 +671,554 @@ c7_puerto_por_defecto() {
   contiene "$salida" "PORT=8080" || { echo "el puerto por defecto no es 8080"; return 1; }
 }
 
-caso "C7: los comandos de git, GitHub, Railway y del agente salen exactos y sin placeholders" c7_comandos_exactos
 caso "C7: --servicio y --puerto se reemplazan en los pasos de Railway" c7_servicio_y_puerto_reemplazados
 caso "C7: el puerto por defecto es 8080" c7_puerto_por_defecto
+
+# ===========================================================================
+echo "== B1: identidad del agente"
+# ===========================================================================
+
+b1_crea_con_una_linea_el_bot() {
+  local d f
+  d=$(nuevo_repo b1-crear --origin "$url_org")
+  commit_todo "$d"
+  f="$d/.claude/identidad-agente.txt"
+  [ -n "$bot_marco" ] || { echo "pipeline.conf no define bot"; return 1; }
+  ejecutar "$d"
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  linea_exacta "$SALIDA" "crear .claude/identidad-agente.txt" || { echo "simulación: falta la línea 'crear .claude/identidad-agente.txt'"; return 1; }
+  [ -e "$f" ] && { echo "la simulación escribió identidad-agente.txt"; return 1; }
+  ejecutar "$d" --aplicar
+  [ "$CODIGO" -eq 0 ] || { echo "--aplicar: código $CODIGO, esperaba 0"; return 1; }
+  [ -f "$f" ] || { echo "--aplicar no generó $f"; return 1; }
+  [ "$(grep -c '' "$f")" -eq 1 ] || { echo "no tiene exactamente una línea ($(grep -c '' "$f"))"; return 1; }
+  [ "$(tr -d '\r\n' < "$f")" = "$bot_marco" ] || { echo "el contenido no es el bot de pipeline.conf ($bot_marco): $(cat "$f")"; return 1; }
+}
+
+b1_el_bot_sale_de_pipeline_conf() {
+  local fuente d f
+  fuente=$(fuente_falsa b1-bot-otro bot=otro-bot-x)
+  d=$(nuevo_repo b1-bot-otro --origin "$url_org")
+  commit_todo "$d"
+  ejecutar_con "$fuente/instalador/instalar.sh" "$d" --aplicar
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0; salida: $SALIDA"; return 1; }
+  f="$d/.claude/identidad-agente.txt"
+  [ -f "$f" ] || { echo "no generó $f"; return 1; }
+  [ "$(tr -d '\r\n' < "$f")" = "otro-bot-x" ] || { echo "no usó bot= del pipeline.conf de la fuente: $(cat "$f")"; return 1; }
+}
+
+b1_segunda_corrida_igual() {
+  local d f antes despues
+  d=$(nuevo_repo b1-igual --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d" --aplicar
+  f="$d/.claude/identidad-agente.txt"
+  [ -f "$f" ] || { echo "no generó $f en la primera corrida"; return 1; }
+  antes=$(cat "$f")
+  ejecutar "$d" --aplicar
+  [ "$CODIGO" -eq 0 ] || { echo "segunda corrida: código $CODIGO, esperaba 0"; return 1; }
+  linea_exacta "$SALIDA" "igual .claude/identidad-agente.txt" || { echo "no marcó identidad-agente.txt como igual"; return 1; }
+  despues=$(cat "$f")
+  [ "$antes" = "$despues" ] || { echo "la segunda corrida cambió el archivo"; return 1; }
+}
+
+b1_preexistente_con_ese_contenido_es_igual() {
+  local a b
+  a=$(nuevo_repo b1-igual-base --origin "$url_org")
+  commit_todo "$a"
+  ejecutar "$a" --aplicar
+  [ -f "$a/.claude/identidad-agente.txt" ] || { echo "no generó el archivo base"; return 1; }
+  b=$(nuevo_repo b1-igual-copia --origin "$url_org")
+  mkdir -p "$b/.claude"
+  cp "$a/.claude/identidad-agente.txt" "$b/.claude/identidad-agente.txt"
+  commit_todo "$b"
+  ejecutar "$b"
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  linea_exacta "$SALIDA" "igual .claude/identidad-agente.txt" || { echo "un archivo con el contenido generado debería ser 'igual'"; return 1; }
+}
+
+# b1_conflicto_con <nombre único> <contenido> [--aplicar]: un archivo con otro contenido es conflicto y
+# no se pisa.
+b1_conflicto_con() {
+  local nombre=$1 contenido=$2 d f snap
+  shift 2
+  d=$(nuevo_repo "b1-conflicto-$nombre" --origin "$url_org")
+  escribir "$d/.claude/identidad-agente.txt" "$contenido"
+  commit_todo "$d"
+  f="$d/.claude/identidad-agente.txt"
+  snap="$tmp/identidad-conflicto-$nombre"
+  cp "$f" "$snap"
+  ejecutar "$d" "$@"
+  [ "$CODIGO" -eq 3 ] || { echo "código $CODIGO, esperaba 3"; return 1; }
+  linea_exacta "$SALIDA" "conflicto .claude/identidad-agente.txt" || { echo "no reportó el conflicto"; return 1; }
+  cmp -s "$snap" "$f" || { echo "pisó el archivo en conflicto"; return 1; }
+  hay_linea "$(pasos "$SALIDA")" '^diff .*identidad-agente\.txt' || { echo "el bloque de conflictos no trae un diff de identidad-agente.txt"; return 1; }
+}
+
+b1_no_cuenta_para_el_modo() {
+  local d
+  d=$(nuevo_repo b1-modo-nuevo --origin "$url_org")
+  escribir "$d/README.md" "hola"
+  escribir "$d/.claude/identidad-agente.txt" "$bot_marco
+"
+  commit_todo "$d"
+  ejecutar "$d"
+  linea_exacta "$SALIDA" "modo nuevo" || { echo "README + identidad-agente.txt debería seguir en 'modo nuevo'"; return 1; }
+  ! linea_exacta "$SALIDA" "modo existente" || { echo "dijo 'modo existente'"; return 1; }
+
+  # Contraste: con otro archivo de verdad sí es existente.
+  d=$(nuevo_repo b1-modo-existente --origin "$url_org")
+  escribir "$d/src/app.py" "print(1)"
+  escribir "$d/.claude/identidad-agente.txt" "$bot_marco
+"
+  commit_todo "$d"
+  ejecutar "$d"
+  linea_exacta "$SALIDA" "modo existente" || { echo "con src/app.py debería ser 'modo existente'"; return 1; }
+}
+
+b1_manifiesto_no_lo_lista() {
+  [ -f "$manifiesto" ] || { echo "no existe $manifiesto"; return 1; }
+  if tr -d '\r' < "$manifiesto" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -Fx ".claude/identidad-agente.txt" > /dev/null; then
+    echo "el manifiesto lista .claude/identidad-agente.txt"
+    return 1
+  fi
+}
+
+caso "B1: crea .claude/identidad-agente.txt con una sola línea, el bot de pipeline.conf (y la simulación no escribe)" b1_crea_con_una_linea_el_bot
+caso "B1: el bot sale de pipeline.conf de la fuente, no está fijo" b1_el_bot_sale_de_pipeline_conf
+caso "B1: en una segunda corrida el archivo cuenta como igual y no cambia" b1_segunda_corrida_igual
+caso "B1: un archivo preexistente con ese contenido es igual" b1_preexistente_con_ese_contenido_es_igual
+caso "B1: con otro contenido es conflicto, sale 3 y no se pisa (simulación)" b1_conflicto_con sim "otro-bot
+"
+caso "B1: con otro contenido es conflicto, sale 3 y no se pisa (--aplicar)" b1_conflicto_con apl "otro-bot
+" --aplicar
+caso "B1: el bot con una segunda línea es conflicto" b1_conflicto_con dos-lineas "$bot_marco
+segunda
+" --aplicar
+caso "B1: un archivo vacío es conflicto" b1_conflicto_con vacio "" --aplicar
+caso "B1: no cuenta para detectar el modo (README + identidad = nuevo; con src/app.py = existente)" b1_no_cuenta_para_el_modo
+caso "B1: el manifiesto no lista .claude/identidad-agente.txt" b1_manifiesto_no_lo_lista
+
+# ===========================================================================
+echo "== B2: staging no se crea en local"
+# ===========================================================================
+
+# b2_no_crea <sim|apl> <con|sin>: sin staging previo, no toca ninguna referencia y dice "no se crea".
+b2_no_crea() {
+  local modo=$1 commits=$2 d antes despues activa args=()
+  d=$(nuevo_repo "b2-no-crea-$modo-$commits" --rama trabajo --origin "$url_org")
+  [ "$commits" = con ] && commit_todo "$d"
+  [ "$modo" = apl ] && args=(--aplicar)
+  antes=$(refs "$d")
+  activa=$(git -C "$d" branch --show-current)
+  ejecutar "$d" ${args[@]+"${args[@]}"}
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  [ "$(printf '%s\n' "$SALIDA" | grep '^rama staging:')" = "rama staging: no se crea" ] \
+    || { echo "esperaba exactamente 'rama staging: no se crea', salió: $(printf '%s\n' "$SALIDA" | grep '^rama staging:')"; return 1; }
+  despues=$(refs "$d")
+  [ "$antes" = "$despues" ] || { echo "cambiaron las referencias del repo"; return 1; }
+  git -C "$d" show-ref --verify --quiet refs/heads/staging && { echo "creó la rama staging"; return 1; }
+  [ "$(git -C "$d" branch --show-current)" = "$activa" ] || { echo "cambió la rama activa"; return 1; }
+  return 0
+}
+
+# b2_existe_local <sim|apl>: con staging local dicen "existe" y no se mueve.
+b2_existe_local() {
+  local modo=$1 d viejo args=() antes
+  d=$(nuevo_repo "b2-existe-$modo" --origin "$url_org")
+  commit_todo "$d" primero
+  viejo=$(git -C "$d" rev-parse HEAD)
+  git -C "$d" branch staging "$viejo"
+  commit_todo "$d" segundo
+  [ "$modo" = apl ] && args=(--aplicar)
+  antes=$(refs "$d")
+  ejecutar "$d" ${args[@]+"${args[@]}"}
+  [ "$(printf '%s\n' "$SALIDA" | grep '^rama staging:')" = "rama staging: existe" ] \
+    || { echo "esperaba exactamente 'rama staging: existe', salió: $(printf '%s\n' "$SALIDA" | grep '^rama staging:')"; return 1; }
+  [ "$(git -C "$d" rev-parse staging)" = "$viejo" ] || { echo "movió staging"; return 1; }
+  [ "$antes" = "$(refs "$d")" ] || { echo "cambiaron las referencias del repo"; return 1; }
+}
+
+b2_existe_si_es_la_rama_activa() {
+  local d
+  d=$(nuevo_repo b2-existe-activa --rama staging --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d" --aplicar
+  linea_exacta "$SALIDA" "rama staging: existe" || { echo "con staging como rama activa esperaba 'rama staging: existe'"; return 1; }
+}
+
+# b2_solo_origin_staging <sim|apl>: staging solo como origin/staging.
+b2_solo_origin_staging() {
+  local modo=$1 d args=() antes
+  d=$(nuevo_repo "b2-origin-staging-$modo" --origin "$url_org")
+  commit_todo "$d"
+  git -C "$d" update-ref refs/remotes/origin/staging HEAD
+  [ "$modo" = apl ] && args=(--aplicar)
+  antes=$(refs "$d")
+  ejecutar "$d" ${args[@]+"${args[@]}"}
+  linea_exacta "$SALIDA" "rama staging: existe" || { echo "con origin/staging esperaba 'rama staging: existe'"; return 1; }
+  hay_linea "$SALIDA" '^nota: staging existe solo como origin/staging' || { echo "falta la nota 'staging existe solo como origin/staging'"; return 1; }
+  git -C "$d" show-ref --verify --quiet refs/heads/staging && { echo "creó la rama local staging"; return 1; }
+  [ "$antes" = "$(refs "$d")" ] || { echo "cambiaron las referencias del repo"; return 1; }
+}
+
+# Contraste: otra rama remota (origin/main) no cuenta como staging.
+b2_otra_rama_remota_no_es_staging() {
+  local d
+  d=$(nuevo_repo b2-origin-main --origin "$url_org")
+  commit_todo "$d"
+  git -C "$d" update-ref refs/remotes/origin/main HEAD
+  ejecutar "$d" --aplicar
+  linea_exacta "$SALIDA" "rama staging: no se crea" || { echo "con solo origin/main esperaba 'rama staging: no se crea'"; return 1; }
+}
+
+# Un staging que existe en el remoto pero que no se trajo no se ve: el instalador no hace fetch.
+b2_no_hace_fetch() {
+  local bare d antes_local antes_remoto
+  bare="$tmp/remotos/b2-fetch.git"
+  git init -q --bare "$bare"
+  d=$(nuevo_repo b2-fetch --sin-origen)
+  git -C "$d" remote add origin "$bare"
+  commit_todo "$d"
+  git -C "$d" push -q origin main:main main:staging
+  git -C "$d" update-ref -d refs/remotes/origin/staging
+  antes_local=$(refs "$d")
+  antes_remoto=$(git -C "$bare" show-ref)
+  ejecutar "$d" --aplicar
+  [ "$antes_remoto" = "$(git -C "$bare" show-ref)" ] || { echo "cambió el remoto"; return 1; }
+  [ "$antes_local" = "$(refs "$d")" ] || { echo "cambiaron las referencias locales (¿hizo fetch?)"; return 1; }
+  linea_exacta "$SALIDA" "rama staging: no se crea" || { echo "sin origin/staging local esperaba 'rama staging: no se crea'"; return 1; }
+}
+
+caso "B2: con commits y sin staging, la simulación dice 'no se crea' y no toca ninguna referencia" b2_no_crea sim con
+caso "B2: con commits y sin staging, --aplicar dice 'no se crea' y no crea ni mueve ramas" b2_no_crea apl con
+caso "B2: sin commits, la simulación dice 'no se crea' (ya no 'sin commits')" b2_no_crea sim sin
+caso "B2: sin commits, --aplicar dice 'no se crea' (ya no 'sin commits')" b2_no_crea apl sin
+caso "B2: con staging local dice 'existe' y no lo mueve (simulación)" b2_existe_local sim
+caso "B2: con staging local dice 'existe' y no lo mueve (--aplicar)" b2_existe_local apl
+caso "B2: si staging es la rama activa dice 'existe'" b2_existe_si_es_la_rama_activa
+caso "B2: con solo origin/staging dice 'existe', trae su nota y no crea la rama (simulación)" b2_solo_origin_staging sim
+caso "B2: con solo origin/staging dice 'existe', trae su nota y no crea la rama (--aplicar)" b2_solo_origin_staging apl
+caso "B2: otra rama remota (origin/main) no cuenta como staging" b2_otra_rama_remota_no_es_staging
+caso "B2: no hace fetch: un staging solo del remoto, sin traer, no se ve y el remoto no cambia" b2_no_hace_fetch
+
+# ===========================================================================
+echo "== B3: repo de la organización, sin notas"
+# ===========================================================================
+
+# b3_sin_notas <nombre único> <url> <con|sin> [--aplicar]
+b3_sin_notas() {
+  local nombre=$1 url=$2 commits=$3 d
+  shift 3
+  d=$(nuevo_repo "b3-$nombre" --origin "$url")
+  [ "$commits" = con ] && commit_todo "$d"
+  ejecutar "$d" "$@"
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  if hay_linea "$SALIDA" '^nota:'; then
+    echo "salieron notas: $(printf '%s\n' "$SALIDA" | grep '^nota:')"
+    return 1
+  fi
+  ! contiene "$SALIDA" "el dueño del repo" || { echo "salió la nota del dueño"; return 1; }
+}
+
+b3_org_sale_de_pipeline_conf() {
+  local fuente d
+  # org=acme en la fuente: un repo de acme no lleva notas, aunque su dueño no sea el de dueno=.
+  fuente=$(fuente_falsa b3-org-acme org=acme)
+  d=$(nuevo_repo b3-org-acme)
+  commit_todo "$d"
+  ejecutar_con "$fuente/instalador/instalar.sh" "$d"
+  if hay_linea "$SALIDA" '^nota:'; then
+    echo "con org=acme, un repo de acme no debería traer notas: $(printf '%s\n' "$SALIDA" | grep '^nota:')"
+    return 1
+  fi
+  # Contraste: con esa misma fuente, un repo de la organización real sí es ajeno.
+  d=$(nuevo_repo b3-org-acme-ajeno --origin "$url_org")
+  commit_todo "$d"
+  ejecutar_con "$fuente/instalador/instalar.sh" "$d"
+  hay_linea "$SALIDA" '^nota: el destino no es un repo de acme' \
+    || { echo "con org=acme, un repo de $org_marco debería traer 'nota: el destino no es un repo de acme'"; return 1; }
+}
+
+caso "B3: repo de la organización con commits, sin staging: ninguna nota" b3_sin_notas con-sim "$url_org" con
+caso "B3: repo de la organización sin commits: ninguna nota" b3_sin_notas sin-sim "$url_org" sin
+caso "B3: repo de la organización con commits y --aplicar: ninguna nota" b3_sin_notas con-apl "$url_org" con --aplicar
+caso "B3: repo de la organización sin commits y --aplicar: ninguna nota" b3_sin_notas sin-apl "$url_org" sin --aplicar
+caso "B3: origin sin .git: ninguna nota" b3_sin_notas sin-punto-git "https://github.com/$org_marco/app" con
+caso "B3: origin ssh git@github.com:<org>/<repo>.git: ninguna nota" b3_sin_notas ssh "git@github.com:$org_marco/app.git" con
+caso "B3: la organización se compara sin distinguir mayúsculas" b3_sin_notas mayusculas "https://github.com/${org_marco^^}/app.git" con
+caso "B3/B4: la organización sale de org= en pipeline.conf, no está fija" b3_org_sale_de_pipeline_conf
+
+# ===========================================================================
+echo "== B4: fuera de la organización"
+# ===========================================================================
+
+# b4_nota_destino <nombre único> <url | SIN>: sale la nota de que el destino no es de la organización.
+b4_nota_destino() {
+  local nombre=$1 url=$2 d
+  if [ "$url" = SIN ]; then
+    d=$(nuevo_repo "b4-$nombre" --sin-origen)
+  else
+    d=$(nuevo_repo "b4-$nombre" --origin "$url")
+  fi
+  commit_todo "$d"
+  ejecutar "$d"
+  hay_linea "$SALIDA" "^nota: el destino no es un repo de $org_marco" \
+    || { echo "falta 'nota: el destino no es un repo de $org_marco'; notas: $(printf '%s\n' "$SALIDA" | grep '^nota:')"; return 1; }
+}
+
+b4_notas_de_hoy() {
+  local d
+  d=$(nuevo_repo b4-hoy-sin-origin --sin-origen)
+  commit_todo "$d"
+  ejecutar "$d"
+  hay_linea "$SALIDA" '^nota: sin origin: el repo sale del nombre de la carpeta' || { echo "sin origin: falta la nota 'sin origin'"; return 1; }
+
+  d=$(nuevo_repo b4-hoy-no-github --origin "https://gitlab.com/$org_marco/app.git")
+  commit_todo "$d"
+  ejecutar "$d"
+  hay_linea "$SALIDA" '^nota: origin no apunta a un repo de github.com' || { echo "origin que no es de GitHub: falta la nota"; return 1; }
+
+  d=$(nuevo_repo b4-hoy-dueno)
+  commit_todo "$d"
+  ejecutar "$d"
+  hay_linea "$SALIDA" "^nota: el dueño del repo \(acme\) no es el de \.claude/pipeline\.conf \($dueno_marco\)" \
+    || { echo "dueño distinto: falta la nota del dueño"; return 1; }
+}
+
+# Contraste: si el dueño del origin es el de dueno= (pero no es la organización), sale la nota del
+# destino y no la del dueño.
+b4_dueno_igual_no_lleva_nota_de_dueno() {
+  local d
+  d=$(nuevo_repo b4-dueno-igual --origin "https://github.com/$dueno_marco/app.git")
+  commit_todo "$d"
+  ejecutar "$d"
+  hay_linea "$SALIDA" "^nota: el destino no es un repo de $org_marco" || { echo "falta la nota del destino"; return 1; }
+  ! contiene "$SALIDA" "el dueño del repo" || { echo "salió la nota del dueño con dueño igual al de dueno="; return 1; }
+}
+
+caso "B4: origin de otro dueño (https://github.com/o/r.git): nota 'el destino no es un repo de <org>'" b4_nota_destino otro-dueno "https://github.com/o/r.git"
+caso "B4: sin origin: nota 'el destino no es un repo de <org>'" b4_nota_destino sin-origin SIN
+caso "B4: origin que no es de GitHub: nota 'el destino no es un repo de <org>'" b4_nota_destino no-github "https://gitlab.com/$org_marco/app.git"
+caso "B4: una organización que solo empieza igual (<org>-otra) no cuenta" b4_nota_destino prefijo "https://github.com/$org_marco-otra/app.git"
+caso "B4: la organización como nombre de repo de otro dueño no cuenta" b4_nota_destino como-repo "https://github.com/otra/$org_marco.git"
+caso "B4: siguen saliendo las notas de hoy (sin origin, origin no GitHub, dueño distinto)" b4_notas_de_hoy
+caso "B4: con dueño igual al de dueno= no sale la nota del dueño" b4_dueno_igual_no_lleva_nota_de_dueno
+
+# ===========================================================================
+echo "== B5: pasos manuales"
+# ===========================================================================
+
+b5_encabezado() {
+  local d p enc
+  d=$(nuevo_repo b5-encabezado --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  p=$(pasos "$SALIDA")
+  enc=$(printf '%s\n' "$p" | sed -n '2,$p' | grep -m1 '[^[:space:]]')
+  [ -n "$enc" ] || { echo "no hay nada después de '== Pasos manuales'"; return 1; }
+  contiene "$enc" "/crear-repo" || { echo "la primera línea no nombra /crear-repo: $enc"; return 1; }
+  contiene "$enc" "T0" || { echo "la primera línea no nombra el PR T0: $enc"; return 1; }
+  contiene "$enc" "staging" || { echo "la primera línea no nombra staging: $enc"; return 1; }
+  hay_linea_i "$enc" 'ruleset' || { echo "la primera línea no nombra los rulesets de la organización: $enc"; return 1; }
+}
+
+b5_orden_sin_conflictos() {
+  local d p enc cp gcd rein ident rw radd v
+  d=$(nuevo_repo b5-orden --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  p=$(pasos "$SALIDA")
+  enc=$(linea_de "$p" '/crear-repo')
+  cp=$(linea_de "$p" 'cp \.claude/settings\.local\.example\.json \.claude/settings\.local\.json')
+  gcd=$(linea_de "$p" 'GH_CONFIG_DIR')
+  rein=$(linea_de "$p" 'reinici')
+  ident=$(linea_de "$p" 'identidad-agente\.txt')
+  rw=$(linea_de "$p" 'cuando staging ya exista')
+  radd=$(linea_de "$p" 'railway add')
+  for v in enc cp gcd rein ident rw radd; do
+    [ -n "${!v}" ] || { echo "no encontré en los pasos: $v"; return 1; }
+  done
+  [ "$enc" -lt "$cp" ] && [ "$cp" -le "$gcd" ] && [ "$gcd" -le "$rein" ] && [ "$rein" -le "$ident" ] \
+    && [ "$ident" -lt "$rw" ] && [ "$rw" -le "$radd" ] \
+    || { echo "orden equivocado (línea de cada uno): encabezado=$enc cp=$cp GH_CONFIG_DIR=$gcd reiniciar=$rein identidad=$ident 'cuando staging ya exista'=$rw railway_add=$radd"; return 1; }
+  hay_linea "$p" '^diff ' && { echo "sin conflictos no debería salir ningún diff"; return 1; }
+  contiene "$SALIDA" "onflicto" && { echo "sin conflictos no debería aparecer la palabra conflicto"; return 1; }
+  return 0
+}
+
+b5_orden_con_conflictos() {
+  local d p enc cf dif cp v
+  d=$(nuevo_repo b5-orden-conflicto --origin "$url_org")
+  cp "$repo/.gitattributes" "$d/.gitattributes"
+  printf 'x' >> "$d/.gitattributes"
+  commit_todo "$d"
+  ejecutar "$d"
+  [ "$CODIGO" -eq 3 ] || { echo "código $CODIGO, esperaba 3"; return 1; }
+  p=$(pasos "$SALIDA")
+  enc=$(linea_de "$p" '/crear-repo')
+  cf=$(linea_de "$p" 'conflictos')
+  dif=$(linea_de "$p" '^diff .*\.gitattributes')
+  cp=$(linea_de "$p" 'cp \.claude/settings\.local\.example\.json \.claude/settings\.local\.json')
+  for v in enc cf dif cp; do
+    [ -n "${!v}" ] || { echo "no encontré en los pasos: $v"; return 1; }
+  done
+  [ "$enc" -lt "$cf" ] && [ "$cf" -le "$dif" ] && [ "$dif" -lt "$cp" ] \
+    || { echo "el bloque de conflictos debe ir entre el encabezado y la sección Agente: encabezado=$enc conflictos=$cf diff=$dif cp=$cp"; return 1; }
+}
+
+b5_agente() {
+  local d p linea_ident
+  d=$(nuevo_repo b5-agente --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  p=$(pasos "$SALIDA")
+  linea_exacta "$p" '[ -e .claude/settings.local.json ] || cp .claude/settings.local.example.json .claude/settings.local.json' \
+    || { echo "falta la línea exacta del cp de settings.local.json"; return 1; }
+  contiene "$p" "GH_CONFIG_DIR" || { echo "falta la indicación de completar GH_CONFIG_DIR"; return 1; }
+  hay_linea_i "$p" 'reinici' || { echo "falta reiniciar la sesión"; return 1; }
+  linea_ident=$(printf '%s\n' "$p" | grep -m1 'identidad-agente\.txt')
+  [ -n "$linea_ident" ] || { echo "ninguna línea menciona .claude/identidad-agente.txt"; return 1; }
+  hay_linea_i "$linea_ident" 'incluid' || { echo "la línea de identidad-agente.txt no dice que ya viene incluido: $linea_ident"; return 1; }
+}
+
+b5_no_pide_identidad_por_pr() {
+  local d p l
+  d=$(nuevo_repo b5-identidad-pr --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  p=$(pasos "$SALIDA")
+  while IFS= read -r l; do
+    hay_linea "$l" 'identidad-agente' || continue
+    hay_linea "$l" '\bPR\b|gobierno|aprueba|mergea' && { echo "una línea sobre identidad-agente.txt pide un PR: $l"; return 1; }
+  done <<< "$p"
+  hay_linea "$p" 'PR de gobierno|lo apruebas y lo mergeas' && { echo "sigue el paso viejo del PR de gobierno de la identidad"; return 1; }
+  return 0
+}
+
+b5_railway() {
+  local d p rw r
+  d=$(nuevo_repo b5-railway --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d"
+  p=$(pasos "$SALIDA")
+  rw=$(linea_de "$p" 'cuando staging ya exista')
+  [ -n "$rw" ] || { echo "la sección Railway no está marcada 'cuando staging ya exista'"; return 1; }
+  r=$(printf '%s\n' "$p" | sed -n "${rw},\$p")
+  contiene "$r" "railway init --name app" || { echo "falta 'railway init --name app'"; return 1; }
+  contiene "$r" "railway add --service app --repo $org_marco/app --branch main" || { echo "falta 'railway add'"; return 1; }
+  contiene "$r" "railway environment new staging --duplicate production --service-config app source.branch staging" \
+    || { echo "falta 'railway environment new'"; return 1; }
+  contiene "$r" "railway variable set PORT=8080 --service app --environment production --skip-deploys" \
+    || { echo "falta la variable PORT en production"; return 1; }
+  contiene "$r" "railway variable set PORT=8080 --service app --environment staging --skip-deploys" \
+    || { echo "falta la variable PORT en staging"; return 1; }
+  contiene "$r" "railway domain --port 8080 --service app --environment production" || { echo "falta 'railway domain' en production"; return 1; }
+  contiene "$r" "railway domain --port 8080 --service app --environment staging" || { echo "falta 'railway domain' en staging"; return 1; }
+  contiene "$r" "npm install --save-dev railway@3.11.0" || { echo "falta instalar el SDK railway@3.11.0"; return 1; }
+  contiene "$r" "Node 22" || { echo "falta la nota de Node 22"; return 1; }
+  contiene "$r" "railway environment link production" || { echo "falta 'environment link production'"; return 1; }
+  contiene "$r" "railway environment link staging" || { echo "falta 'environment link staging'"; return 1; }
+  contiene "$r" "railway config plan" || { echo "falta 'railway config plan'"; return 1; }
+  contiene "$r" "railway config apply" || { echo "falta 'railway config apply'"; return 1; }
+  hay_linea_i "$(printf '%s\n' "$r" | grep -i 'github app')" 'railway' || { echo "falta la línea que nombra la GitHub App de Railway"; return 1; }
+  hay_linea "$(printf '%s\n' "$r" | grep -i 'github app')" 'All repositories' || { echo "la línea de la GitHub App no dice 'All repositories'"; return 1; }
+}
+
+b5_sin_placeholders() {
+  local d p
+  d=$(nuevo_repo b5-placeholders --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d" --servicio miapi --puerto 3000
+  p=$(pasos "$SALIDA")
+  contiene "$p" "{{" && { echo "quedó un marcador {{...}} sin reemplazar"; return 1; }
+  contiene "$p" "}}" && { echo "quedó un marcador {{...}} sin reemplazar (cierre)"; return 1; }
+  contiene "$p" "<dueño>" && { echo "quedó <dueño> sin reemplazar"; return 1; }
+  contiene "$p" "<repo>" && { echo "quedó <repo> sin reemplazar"; return 1; }
+  contiene "$p" "<servicio>" && { echo "quedó <servicio> sin reemplazar"; return 1; }
+  contiene "$p" "<puerto>" && { echo "quedó <puerto> sin reemplazar"; return 1; }
+  contiene "$p" "railway add --service miapi --repo $org_marco/app --branch main" || { echo "no reemplazó servicio/dueño/repo"; return 1; }
+  contiene "$p" "PORT=3000" || { echo "no reemplazó el puerto"; return 1; }
+  return 0
+}
+
+# b5_ya_no_salen <variante>: en ninguna forma salen los pasos de git ni de GitHub de antes.
+b5_ya_no_salen() {
+  local v=$1 d pat
+  case "$v" in
+    main) d=$(nuevo_repo b5-no-main --origin "$url_org"); commit_todo "$d" ;;
+    rama-trabajo) d=$(nuevo_repo b5-no-trabajo --rama trabajo --origin "$url_org"); commit_todo "$d" ;;
+    staging-activa) d=$(nuevo_repo b5-no-staging-activa --rama staging --origin "$url_org"); commit_todo "$d" ;;
+    sin-commits) d=$(nuevo_repo b5-no-sin-commits --origin "$url_org") ;;
+    sin-origin) d=$(nuevo_repo b5-no-sin-origin --sin-origen); commit_todo "$d" ;;
+    fuera-de-org) d=$(nuevo_repo b5-no-fuera); commit_todo "$d" ;;
+    conflicto)
+      d=$(nuevo_repo b5-no-conflicto --origin "$url_org")
+      cp "$repo/.gitattributes" "$d/.gitattributes"
+      printf 'x' >> "$d/.gitattributes"
+      commit_todo "$d"
+      ;;
+  esac
+  ejecutar "$d" --aplicar
+  [ "$CODIGO" -eq 0 ] || [ "$CODIGO" -eq 3 ] || { echo "código $CODIGO"; return 1; }
+  contiene "$SALIDA" "== Pasos manuales" || { echo "no imprimió los pasos manuales"; return 1; }
+  for pat in 'git commit' 'git push' 'git switch staging' 'git merge --ff-only' 'merge --ff-only' \
+    'repos/[^ ]*/collaborators' 'repository_invitations' 'branches/[^ ]*/protection'; do
+    hay_linea "$SALIDA" "$pat" && { echo "todavía sale algo que cumple '$pat': $(printf '%s\n' "$SALIDA" | grep -E -m1 -- "$pat")"; return 1; }
+  done
+  return 0
+}
+
+b5_sin_tokens() {
+  local d pat
+  d=$(nuevo_repo b5-tokens --origin "$url_org")
+  commit_todo "$d"
+  ejecutar "$d" --aplicar
+  for pat in 'ghp_' 'github_pat_' 'gho_' 'GH_TOKEN' 'GITHUB_TOKEN' 'gh auth token' 'show-token' 'auth status -t'; do
+    hay_linea "$SALIDA" "$pat" && { echo "imprime o pide un token ($pat)"; return 1; }
+  done
+  return 0
+}
+
+caso "B5: la primera línea de los pasos dice que /crear-repo hace el git, el PR T0 y staging, y que la protección son los rulesets" b5_encabezado
+caso "B5: orden encabezado, Agente y Railway ('cuando staging ya exista'), sin diff ni 'conflicto' si no hay conflictos" b5_orden_sin_conflictos
+caso "B5: con conflictos, el bloque de conflictos (con su diff) va entre el encabezado y la sección Agente" b5_orden_con_conflictos
+caso "B5: la sección Agente trae el cp exacto, GH_CONFIG_DIR, reiniciar la sesión y la identidad ya incluida" b5_agente
+caso "B5: ninguna línea pide crear .claude/identidad-agente.txt por PR" b5_no_pide_identidad_por_pr
+caso "B5: la sección Railway trae los comandos de hoy reemplazados, la GitHub App con All repositories y railway@3.11.0" b5_railway
+caso "B5: sin marcadores {{...}} ni <dueño>/<repo>/<servicio>/<puerto>; --servicio y --puerto reemplazados" b5_sin_placeholders
+caso "B5: no salen los pasos de git/GitHub de antes (repo en main)" b5_ya_no_salen main
+caso "B5: no salen los pasos de git/GitHub de antes (rama activa trabajo)" b5_ya_no_salen rama-trabajo
+caso "B5: no salen los pasos de git/GitHub de antes (rama activa staging)" b5_ya_no_salen staging-activa
+caso "B5: no salen los pasos de git/GitHub de antes (sin commits)" b5_ya_no_salen sin-commits
+caso "B5: no salen los pasos de git/GitHub de antes (sin origin)" b5_ya_no_salen sin-origin
+caso "B5: no salen los pasos de git/GitHub de antes (repo fuera de la organización)" b5_ya_no_salen fuera-de-org
+caso "B5: no salen los pasos de git/GitHub de antes (con conflicto)" b5_ya_no_salen conflicto
+caso "B5: ningún comando impreso contiene un token ni pide imprimirlo" b5_sin_tokens
+
+# ===========================================================================
+echo "== B6: contrato con el paso 0 de /crear-repo"
+# ===========================================================================
+
+b6_contrato_paso_0() {
+  local d antes despues
+  d=$(nuevo_repo b6-contrato --origin "https://github.com/$org_marco/app.git")
+  commit_todo "$d"
+  antes=$(huella "$d")
+  ejecutar "$d"
+  [ "$CODIGO" -eq 0 ] || { echo "código $CODIGO, esperaba 0"; return 1; }
+  linea_exacta "$SALIDA" "crear .claude/identidad-agente.txt" || { echo "falta la línea exacta 'crear .claude/identidad-agente.txt'"; return 1; }
+  ! linea_exacta "$SALIDA" "rama staging: crear" || { echo "sigue saliendo 'rama staging: crear'"; return 1; }
+  if hay_linea "$SALIDA" '^nota:'; then
+    echo "salieron notas: $(printf '%s\n' "$SALIDA" | grep '^nota:')"
+    return 1
+  fi
+  despues=$(huella "$d")
+  [ "$antes" = "$despues" ] || { echo "la simulación cambió el destino"; return 1; }
+}
+
+caso "B6: repo de la organización con un commit vacío: 'crear .claude/identidad-agente.txt', sin 'rama staging: crear' y sin notas" b6_contrato_paso_0
 
 # ===========================================================================
 echo "== C8: errores de uso"

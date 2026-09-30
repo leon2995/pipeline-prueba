@@ -1,55 +1,19 @@
+# El git, el PR T0 y la creación de staging los hace el agente con /crear-repo; la protección de las ramas la dan los rulesets de la organización. Aquí solo quedan tus pasos.
+# Córrelos tú, en una terminal bash (Git Bash en Windows) y en este orden. Ninguno imprime ni pide un token.
 
-# 2. GitHub, con la cuenta del dueño ({{dueno}}).
-# 2a. Invita a {{bot}} como colaborador con escritura.
-gh api -X PUT repos/{{dueno}}/{{repo}}/collaborators/{{bot}} -f permission=push
-# 2b. Acepta la invitación con la configuración de gh del bot: el primer comando busca el id de la invitación y el segundo la acepta.
-id=$(GH_CONFIG_DIR="$HOME/.talos-gh" gh api user/repository_invitations --jq '.[] | select((.repository.full_name | ascii_downcase) == "{{repo_completo_min}}") | .id'); echo "invitación: $id"
-GH_CONFIG_DIR="$HOME/.talos-gh" gh api -X PATCH user/repository_invitations/$id
-# 2c. Protección de main y staging. Aplícala después de que el CI corrió una vez en las dos ramas, para que existan los checks secrets y hooks.
-#     Si el repo también corre el job node o python, agrégalo a contexts y a checks con el mismo app_id.
-gh api -X PUT repos/{{dueno}}/{{repo}}/branches/main/protection --input - <<'JSON'
-{
-  "required_status_checks": {"strict": false, "contexts": ["secrets", "hooks"]},
-  "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
-    "require_code_owner_reviews": true,
-    "dismiss_stale_reviews": true
-  },
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false
-}
-JSON
-# El PATCH fija los checks secrets y hooks a la app de GitHub Actions (app_id 15368).
-gh api -X PATCH repos/{{dueno}}/{{repo}}/branches/main/protection/required_status_checks --input - <<'JSON'
-{"strict": false, "checks": [{"context": "secrets", "app_id": 15368}, {"context": "hooks", "app_id": 15368}]}
-JSON
-gh api -X PUT repos/{{dueno}}/{{repo}}/branches/staging/protection --input - <<'JSON'
-{
-  "required_status_checks": {"strict": false, "contexts": ["secrets", "hooks"]},
-  "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 0,
-    "require_code_owner_reviews": true,
-    "dismiss_stale_reviews": false
-  },
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false
-}
-JSON
-# El PATCH fija los checks secrets y hooks a la app de GitHub Actions (app_id 15368).
-gh api -X PATCH repos/{{dueno}}/{{repo}}/branches/staging/protection/required_status_checks --input - <<'JSON'
-{"strict": false, "checks": [{"context": "secrets", "app_id": 15368}, {"context": "hooks", "app_id": 15368}]}
-JSON
-# 2d. Verifica la protección de las dos ramas. Esperado: main con 1, true, true, true, false, false;
-#     staging con 0, true, false, true, false, false; en las dos, checks secrets:15368 y hooks:15368.
-filtro='{aprobaciones: .required_pull_request_reviews.required_approving_review_count, code_owners: .required_pull_request_reviews.require_code_owner_reviews, descartar_viejas: .required_pull_request_reviews.dismiss_stale_reviews, enforce_admins: .enforce_admins.enabled, force_push: .allow_force_pushes.enabled, borrado: .allow_deletions.enabled, checks: [.required_status_checks.checks[] | "\(.context):\(.app_id)"]}'
-gh api repos/{{dueno}}/{{repo}}/branches/main/protection --jq "$filtro"
-gh api repos/{{dueno}}/{{repo}}/branches/staging/protection --jq "$filtro"
+cd {{destino}}
+{{conflictos}}
 
-# 3. Railway, en tu terminal: el agente solo corre lecturas de railway.
+# 1. Agente, en la carpeta del repo.
+[ -e .claude/settings.local.json ] || cp .claude/settings.local.example.json .claude/settings.local.json
+# Edita .claude/settings.local.json y completa GH_CONFIG_DIR con la ruta real de la configuración de gh del bot: {{gh_config_dir}}
+# (si el archivo ya existía, fusiona solo el bloque env). No lleva ningún token.
+# Reinicia la sesión de Claude Code para que tome el env nuevo.
+# El archivo .claude/identidad-agente.txt ya viene incluido, con una sola línea: {{bot}}
+# Va en el PR T0 y, desde la primera sesión, el hook exige la identidad de {{bot}}.
+
+# 2. Railway, cuando staging ya exista (con el PR T0 ya mergeado), en tu terminal: el agente solo corre lecturas de railway.
+# La GitHub App de Railway tiene que tener acceso al repo: instalada en {{org}} con acceso a All repositories.
 railway init --name {{repo}}
 # (si el proyecto ya existe en Railway, en lugar de init: railway link)
 railway add --service {{servicio}} --repo {{dueno}}/{{repo}} --branch main
@@ -58,7 +22,7 @@ railway variable set PORT={{puerto}} --service {{servicio}} --environment produc
 railway domain --port {{puerto}} --service {{servicio}} --environment production
 railway variable set PORT={{puerto}} --service {{servicio}} --environment staging --skip-deploys
 railway domain --port {{puerto}} --service {{servicio}} --environment staging
-# SDK que pide .railway/railway.ts, con Node 22 o más. Deja railway en devDependencies de package.json: commitéalo por PR.
+# SDK que pide .railway/railway.ts, con Node 22 o más. Deja railway en devDependencies de package.json: ese package.json entra por PR, desde la sesión del repo.
 npm install --save-dev railway@3.11.0
 # Nota: ese comando crea package.json en la raíz si no existe. En un proyecto que no es de Node, desde ahí el job node
 #       del CI y el hook Stop del engineer (run-tests.sh, que prefiere package.json a pyproject.toml) corren npm test.
@@ -69,11 +33,3 @@ railway config apply
 railway environment link staging
 railway config plan
 railway config apply
-
-# 4. Agente.
-[ -e .claude/settings.local.json ] || cp .claude/settings.local.example.json .claude/settings.local.json
-# Edita .claude/settings.local.json y completa GH_CONFIG_DIR con la ruta real de la configuración de gh del bot: {{gh_config_dir}}
-# (si el archivo ya existía, fusiona solo el bloque env). No lleva ningún token.
-# Reinicia la sesión de Claude Code para que tome el env nuevo.
-# Con el agente ya como {{bot}}, pídele el PR de gobierno que crea .claude/identidad-agente.txt con una sola línea: {{bot}}
-# Ese PR lo apruebas y lo mergeas tú, como code owner.

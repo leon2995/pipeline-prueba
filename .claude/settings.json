@@ -1,6 +1,6 @@
 {
   "model": "claude-opus-5-5",
-  "ultracode": true,
+  "effortLevel": "xhigh",
   "permissions": {
     "allow": [
       "Bash(git status*)",
@@ -64,6 +64,13 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-public-repos.sh\"", "timeout": 60 }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",

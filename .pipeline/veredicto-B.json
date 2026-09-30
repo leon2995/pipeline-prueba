@@ -1,0 +1,45 @@
+{
+  "task": "B",
+  "mode": "code",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "media",
+      "file": ".pipeline/criterios-B.md (B9)",
+      "detail": "B9 pide que `bash scripts/test-hooks.sh` dé 0 fallos 'en CI y en Windows'. La parte de CI tiene evidencia: 1050 ok con gawk y con mawk sobre 40c0692. La de Windows no: evidencia-B.md dice 'Suite de hooks completa en Windows sobre 40c0692: en curso' y en wt-b no hay un resultado de esa corrida. Sin evidencia, esa parte de B9 no cuenta como cumplida. Del lado de npm test sí hay evidencia de Windows (94 ok y 155 ok, del engineer).",
+      "fix": "Poner en el cuerpo del PR el resumen de la corrida que está en curso en wt-b (N ok, 0 fallos, con el SHA 40c0692). Si da fallos, es un FIX antes de que Leonardo revise."
+    },
+    {
+      "severity": "baja",
+      "file": "tests/acceptance/test-instalador.sh (b5_no_pide_identidad_por_pr) / instalador/plantillas/pasos-manuales.txt:12-13",
+      "detail": "B5 dice 'Una línea dice que .claude/identidad-agente.txt ya viene en el PR T0 y que [...] el hook exige la identidad'. La prueba rechaza cualquier línea que tenga `identidad-agente` junto con `\\bPR\\b`, que es justo la redacción literal del criterio. Por eso el engineer partió el mensaje en dos líneas: 'ya viene incluido, con una sola línea: <bot>' y 'Va en el PR T0 y, desde la primera sesión, el hook exige la identidad de <bot>' (nota 1 de la evidencia). Para quien lee, la salida cumple la intención, pero la prueba es más estricta que el criterio y rechazaría una implementación literal.",
+      "fix": "Restringir la prueba a lo que quería prohibir: el paso viejo ('PR de gobierno', 'lo apruebas y lo mergeas', 'pídele el PR'). Así 'ya viene en el PR T0' puede ir en una sola línea."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/plantillas/pasos-manuales.txt:9 y .claude/commands/crear-repo.md paso 7",
+      "detail": "La sección Agente imprime la ruta real del directorio de credenciales del bot, `{{gh_config_dir}}`, que en Windows queda como C:/Users/<usuario>/.talos-gh. El paso 7 manda copiar esa sección al cuerpo del PR T0, así que la ruta local y el nombre del directorio de credenciales quedan en GitHub, a la vista del equipo. No es un secreto y T3b ya la pedía (criterios-T3b.md:59), pero contradice el punto 4 de la revisión ('ni nombre rutas de credenciales'). Ningún texto pide ni imprime un token: b5_sin_tokens lo cubre.",
+      "fix": "En el paso 7, pedir que el cuerpo del PR lleve la sección Agente sin la línea de la ruta, o que la plantilla diga 'la ruta de la configuración de gh del bot (SETUP.md)' sin el valor. Si no, documentarlo en el PR como decisión heredada de T3b."
+    },
+    {
+      "severity": "baja",
+      "file": "scripts/test-hooks.sh:1089-1113",
+      "detail": "Cobertura parcial de B7 y del contrato invertido. Las líneas 1089-1097 solo comprueban que crear-repo.md contiene 'la sección Agente de los pasos manuales'. No comprueban que el paso 9 remita a 'la sección Railway', ni que ya no aparezca 'secciones 1 y 2'; lo verifiqué a mano con grep y está bien. Además, `paso0_pasa` quedó solo con el caso que pasa. No hay un control negativo en la suite que muestre que el predicado rechaza una salida con `nota:` o con `rama staging: crear`. Hoy esa evidencia solo existe en la corrida histórica sobre 142a254. Es el patrón inverso de LESSONS [remoto-git-push].",
+      "fix": "Agregar `chequeo falla` de paso0_pasa sobre una simulación fuera de la organización (por ejemplo, origin https://github.com/otra/app.git, que emite la nota del destino). Agregar también un `tiene` para 'la sección Railway' y un `! tiene` para 'secciones 1 y 2'."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/plantillas/pasos-manuales.txt:1",
+      "detail": "El encabezado dice siempre que 'el git, el PR T0 y la creación de staging los hace el agente con /crear-repo'. En un destino fuera de la organización, o en un repo existente, eso es falso: nadie hace esos pasos, y el instalador ya no los imprime. Solo queda la nota B4. Es lo que pide B5, que quita las secciones sin condición, y migrar repos existentes está fuera de alcance, así que no rompe un criterio.",
+      "fix": "Documentarlo en el PR. Si más adelante se instala fuera de la organización, que el encabezado dependa de DE_ORG."
+    },
+    {
+      "severity": "baja",
+      "file": "instalador/plantillas/pasos-manuales.txt:16",
+      "detail": "La línea 'instalada en {{org}} con acceso a All repositories' da a la GitHub App de Railway acceso a todos los repos privados de la organización, no solo a los que se despliegan. Lo pide B5 de forma explícita y lo aprobó Leonardo, pero es más permiso del mínimo.",
+      "fix": "Mencionar en el PR la alternativa 'Only select repositories', que obliga a agregar cada repo nuevo a mano, para que Leonardo lo decida sabiendo el costo."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Pruebas negativas por texto: antes de prohibir una palabra o un patrón en la salida, contrástalo con la redacción literal del criterio; si lo contradice, el engineer ajusta la salida a la prueba y no al criterio."
+}

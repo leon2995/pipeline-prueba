@@ -1,0 +1,69 @@
+{
+  "task": "A1",
+  "mode": "code",
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "alta",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook (copia en scratchpad/smoke-base, idéntica a wt-a1 según git diff --no-index). Si se llama a gh por su ruta de Windows con barras invertidas, el hook no revisa el comando y lo deja pasar: `\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create finconnect-com/x --public` da rc=0. También dan rc=0 `C:\\tools\\gh.exe repo create finconnect-com/x --public` y `\"C:\\Program Files\\GitHub CLI\\gh.exe\" api -X PATCH repos/finconnect-com/x -f visibility=public`. Causa: `plano` borra las barras invertidas, así que el texto queda `...GitHub CLIgh.exe repo create`. Delante de gh queda una letra, `re_repo`, `re_api` y `re_ext` no encuentran nada, y el `if [ $((net_repo + net_api + net_ext)) -gt 0 ]` se salta todo el análisis. El problema es que leer_gh sí reconoce `*\\gh` y `*\\gh.exe`: el hook dice aceptar esa forma, pero el filtro previo es más estrecho que el analizador y falla abierto. Pasa en Windows, la plataforma en uso, y dentro del modelo de amenaza, con la barrera principal contra crear repos públicos (C1) y cambiar la visibilidad (C4).",
+      "fix": "En `plano`, cambiar `\\` por `/` en vez de borrarla (o sumar `\\\\` a la clase que precede a gh en g_gh). Mejor todavía: cuando `$cmd =~ $re_gh`, analizar siempre los segmentos, sin depender de las cuentas textuales. Agregar a test-hooks.sh casos que deben bloquearse con `\"C:\\...\\gh.exe\" repo create ... --public` y con `gh api -X PATCH`, y un caso de la misma ruta que debe pasar con `--private --team forja`."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook y contra `gh repo deploy-key --help` (gh 2.92.0): -R/--repo es flag del comando padre deploy-key. `gh repo deploy-key -R finconnect-com/x add k.pub` y `gh repo deploy-key --repo finconnect-com/x add k.pub` dan rc=0. El hook solo mira `rargs[0] = add`. Rompe C3 (deploy-key add siempre bloqueado) con una forma que gh acepta.",
+      "fix": "Saltar -R/--repo y su valor, y los demás flags, antes de leer el subcomando de deploy-key. O fallar cerrado: pasar solo si el primer posicional es `list`. Agregar el caso a la suite."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook. Falso positivo con la continuación de línea, que un agente usa a menudo en comandos largos. `gh repo create finconnect-com/app \\<salto>  --private --team forja` se bloquea con 'necesita un solo nombre (3 posicionales)'. `gh api -X PATCH repos/{owner}/{repo}/pulls/5 \\<salto>  -f title=x`, una escritura que el pipeline usa, se bloquea con 'no pude leer el endpoint'. Causa: partir conserva la barra invertida y el salto, y xargs los convierte en un token posicional. Falla cerrado, pero rompe el flujo normal y el mensaje no dice la causa real.",
+      "fix": "En partir, o antes de llamarlo, quitar los pares `\\` + salto de línea fuera de comillas simples, como hace analizar_git con `gsub(/\\\\\\r?\\n/, \" \", s)`. Agregar un caso que debe pasar y uno que debe bloquearse con continuación de línea."
+    },
+    {
+      "severity": "media",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook. Si la mutation de GraphQL se arma en una variable, pasa: `Q=\"mutation{updateRepository(...visibility:PUBLIC...)}\"; gh api graphql -f query=\"$Q\"` da rc=0, con `;` y con salto de línea. C4 pide revisar 'mutation en el segmento' y la implementación cumple eso al pie de la letra. Pero poner una query larga en una variable es un patrón común de agente, no una ofuscación, y la lista de permitidos debería fallar cerrada.",
+      "fix": "En revisar_api con endpoint graphql, buscar `mutation` en `${cmd,,}` y no solo en el segmento. O bloquear cuando el valor de `query=` tenga `$` o backticks, igual que el endpoint. Ajustar la redacción de C4."
+    },
+    {
+      "severity": "media",
+      "file": ".pipeline/evidencia/A1.md",
+      "detail": "SOLO LECTURA. C9 exige que la suite nueva falle en C1 a C7 contra los hooks de origin/staging (mutación). La evidencia la marca como pendiente y no hay resultado. Sin evidencia, C9 no cuenta como cumplido. La parte de 870 ok con gawk y mawk en CI sí está documentada.",
+      "fix": "Terminar la mutación y adjuntar el resumen con los casos de C1 a C7 en rojo contra origin/staging antes de pedir la aprobación."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook. La regla de staging (C7) no reconoce git con ruta ni `git.exe`: `git.exe push origin HEAD:staging` y `/usr/bin/git push origin HEAD:staging` dan rc=0. Causa: el grep `${I}git$F +push` exige `git` justo antes de los flags, aunque leer_push y analizar_git sí aceptan `*/git` y `git.exe`. Poco común en un agente; el ruleset protege staging una vez creada.",
+      "fix": "Usar en ese grep el mismo patrón de binario que analizar_git, `(^|[/\\\\])git(\\.exe)?`, y agregar un caso."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO en el hook; no verifiqué que GitHub acepte la ruta. Con ramas que tienen `/`, el chequeo de `p[5]` no ve el final de la ruta: `gh api -X POST repos/finconnect-com/x/branches/feat/y/rename -f new_name=staging` y `.../branches/feat/y/protection` dan rc=0. Renombrar a staging saltaría el control de CODEOWNERS de C7.",
+      "fix": "Para `branches`, bloquear si el endpoint termina en `/rename` o contiene `/protection`, sin depender de la posición."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook; fuera del modelo de amenaza. La normalización del endpoint en C4 es una lista de bloqueados que no falla cerrada ante formas raras. Dan rc=0 con `-X PATCH ... -f private=false`: `http://api.github.com/repos/o/r`, `https://api.github.com:443/repos/o/r`, `//repos/o/r` y `repos//o/r`. También `teams/123/repos/o/r` (API de equipos antigua).",
+      "fix": "En escrituras, bloquear endpoints con `://` que no sean `https://api.github.com/`, y los que tengan `//` o empiecen con `/` después de normalizar."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "CONFIRMADO probando el hook. La red textual bloquea `gh api repos/o/r/issues/5/comments -f body=\"usa gh api -X PATCH\"`. El pipeline comenta con `-f body=...`, y los comentarios de veredicto de este mismo framework nombran gh api y gh repo create. C5 declara el costo solo para --title y -m. Tampoco se dice que el `\"$(gh api ...)\"` entre comillas se bloquea incluso en lecturas.",
+      "fix": "Documentar en C5, en CLAUDE.md (A2) y en el mensaje de bloqueo que los comentarios por gh api van con `-F body=@archivo`."
+    },
+    {
+      "severity": "baja",
+      "file": ".claude/hooks/guard-commands.sh",
+      "detail": "SOLO LECTURA. En C6, `git -C \"$R\" push ...` o `git -C ~/x push ...` se bloquean con 'el directorio no existe', porque xargs deja `$R` y `~` literales. Falla cerrado; el mensaje podría decir que no se expanden variables.",
+      "fix": "Agregar al mensaje: 'usa la ruta literal, sin variables ni ~'."
+    }
+  ],
+  "tests_reviewed": true,
+  "new_lesson": "Un filtro previo que decide si un analizador corre debe ser igual o más amplio que el analizador y usar la misma normalización; si normaliza distinto (por ejemplo, borrando barras invertidas), el control falla abierto justo en las formas que el analizador dice aceptar."
+}

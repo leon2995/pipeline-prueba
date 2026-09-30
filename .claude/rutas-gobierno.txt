@@ -23,3 +23,6 @@ scripts/test-hooks.sh
 scripts/run-task.sh
 scripts/resume-task.sh
 scripts/watch-deploy.sh
+# gitleaks los lee de la raíz y apagan hallazgos del check secrets (A2).
+.gitleaksignore
+.gitleaks.toml

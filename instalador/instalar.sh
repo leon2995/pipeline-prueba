@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
-# Instalador v1 del framework de agentes (T3b; criterios en .pipeline/criterios-T3b.md).
+# Instalador del framework de agentes (T3b; B para repos de la organización; criterios en
+# .pipeline/criterios-T3b.md y .pipeline/criterios-B.md).
 #
 # Uso: bash instalador/instalar.sh <destino> [--aplicar] [--modo nuevo|existente] [--servicio NOMBRE] [--puerto N]
 #
 # Copia a <destino>, la raíz de un repo git, los archivos del framework que lista
-# instalador/manifiesto.txt; genera los archivos propios del destino (.pipeline/lecciones-pendientes.md,
-# .pipeline/plan.json, .pipeline/criterios-T1.md en modo existente y .railway/railway.ts) desde
-# instalador/plantillas/, y crea la rama local staging. La fuente del framework es el repo donde vive
-# este script: el padre de instalador/.
+# instalador/manifiesto.txt y genera los archivos propios del destino (.pipeline/lecciones-pendientes.md,
+# .pipeline/plan.json, .pipeline/criterios-T1.md en modo existente, .railway/railway.ts y
+# .claude/identidad-agente.txt, con el bot de .claude/pipeline.conf) desde instalador/plantillas/. La
+# fuente del framework es el repo donde vive este script: el padre de instalador/.
 #
 # - Sin --aplicar solo simula: imprime el plan completo y no escribe nada en el destino.
-# - Con --aplicar escribe solo los archivos que no existen y crea la rama local staging en HEAD si hay
-#   commits y no existe. Un archivo que ya existe con otro contenido es un conflicto y no se toca.
-# - Nunca hace commit, push ni fetch, y no llama a gh ni a railway: esos pasos los imprime, con los
-#   valores ya reemplazados, después de "== Pasos manuales".
+# - Con --aplicar escribe solo los archivos que no existen. Un archivo que ya existe con otro
+#   contenido es un conflicto y no se toca.
+# - Nunca crea, mueve ni borra ramas (staging nace en el servidor, después del PR T0 de /crear-repo),
+#   nunca hace commit, push ni fetch, y no llama a gh ni a railway: los pasos que le tocan a una persona
+#   los imprime, con los valores ya reemplazados, después de "== Pasos manuales".
+# - Un destino cuyo origin es de github.com/<org> (org de .claude/pipeline.conf) no lleva notas si no
+#   hay nada raro; uno que no es de la organización lo dice en una nota.
 #
 # Salida estándar: "crear|igual|conflicto <ruta>" por archivo (ruta relativa al destino, con /),
-# "modo nuevo|existente", "rama staging: crear|existe|sin commits" y los pasos manuales.
-# Códigos de salida: 0 sin conflictos; 3 con al menos un conflicto; 2 error de uso, sin tocar el
-# destino; 1 error de la fuente (manifiesto, configuración o plantillas inválidos) o una escritura
+# "modo nuevo|existente", "rama staging: existe|no se crea", las notas ("nota: ...") y los pasos
+# manuales. Códigos de salida: 0 sin conflictos; 3 con al menos un conflicto; 2 error de uso, sin tocar
+# el destino; 1 error de la fuente (manifiesto, configuración o plantillas inválidos) o una escritura
 # que falló.
 #
 # Portabilidad: bash 4.4 o más, coreutils y git, sin awk ni sed. Git Bash para Windows y Linux, y
@@ -33,7 +37,7 @@ SEGUROS='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-'
 MANIFIESTOS_CONOCIDOS=(package.json pyproject.toml go.mod requirements.txt Cargo.toml Gemfile Dockerfile)
 MAX_PISTAS=20
 # Archivos que genera el instalador. Nunca van en el manifiesto.
-GENERADOS=(.pipeline/lecciones-pendientes.md .pipeline/plan.json .pipeline/criterios-T1.md .railway/railway.ts)
+GENERADOS=(.pipeline/lecciones-pendientes.md .pipeline/plan.json .pipeline/criterios-T1.md .railway/railway.ts .claude/identidad-agente.txt)
 
 # ---------------------------------------------------------------------------
 # errores
@@ -52,7 +56,7 @@ error_fuente() {
 ayuda() {
   printf '%s\n' "$USO" '' \
     'Sin --aplicar solo simula: imprime el plan y no escribe nada en el destino.' \
-    '  --aplicar          escribe los archivos que no existen y crea la rama local staging' \
+    '  --aplicar          escribe los archivos que no existen (no crea ramas)' \
     '  --modo M           fuerza el modo: nuevo o existente (por defecto se detecta)' \
     '  --servicio NOMBRE  servicio de Railway (por defecto, el nombre del repo)' \
     '  --puerto N         puerto de la app en Railway (por defecto 8080)' \
@@ -102,18 +106,6 @@ puerto_valido() {
 # citar <s>: deja en CITADO <s> entre comillas simples, lista para pegar en bash.
 citar() {
   CITADO="'${1//\'/\'\\\'\'}'"
-}
-
-# palabra <s>: deja en PALABRA <s> tal cual si solo tiene caracteres seguros para bash (letras,
-# dígitos, ".", "_", "/" y "-"); si no, entre comillas simples.
-palabra() {
-  case "$1" in
-    '' | *[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-]*)
-      citar "$1"
-      PALABRA=$CITADO
-      ;;
-    *) PALABRA=$1 ;;
-  esac
 }
 
 # rellenar <texto> [clave valor]...: deja en RELLENO el texto con cada {{clave}} cambiado por su
@@ -328,20 +320,23 @@ validar_destino() {
   [ ! "$DESTINO" -ef "$FUENTE" ] || error_uso "el destino es la propia fuente del framework: $DESTINO"
 }
 
-# leer_conf: bot y dueño de .claude/pipeline.conf de la fuente (la primera línea de cada clave).
+# leer_conf: bot, dueño y organización de .claude/pipeline.conf de la fuente (la primera línea de
+# cada clave).
 leer_conf() {
   local f="$FUENTE/.claude/pipeline.conf" linea
-  BOT='' DUENO_CONF=''
+  BOT='' DUENO_CONF='' ORG=''
   [ -f "$f" ] || error_fuente "falta la configuración del framework: $f"
   while IFS= read -r linea || [ -n "$linea" ]; do
     linea=${linea//$'\r'/}
     case "$linea" in
       bot=*) [ -n "$BOT" ] || BOT=${linea#bot=} ;;
       dueno=*) [ -n "$DUENO_CONF" ] || DUENO_CONF=${linea#dueno=} ;;
+      org=*) [ -n "$ORG" ] || ORG=${linea#org=} ;;
     esac
   done < "$f"
   solo_seguros "$BOT" || error_fuente "$f no define un bot válido (bot=<login>)"
   solo_seguros "$DUENO_CONF" || error_fuente "$f no define un dueño válido (dueno=<login>)"
+  solo_seguros "$ORG" || error_fuente "$f no define una organización válida (org=<login>)"
 }
 
 # validar_manifiesto: cada ruta es relativa y limpia, no se repite, no es un archivo generado y
@@ -364,14 +359,19 @@ validar_manifiesto() {
 
 # identificar_repo: dueño y repo desde origin (github.com). Sin origin de GitHub, el repo sale del
 # nombre de la carpeta y el dueño de pipeline.conf. Nunca imprime la URL: podría traer credenciales.
+# Deja DE_ORG en 1 si el dueño del origin es la organización de pipeline.conf (sin distinguir
+# mayúsculas). Solo los repos que no son de la organización llevan notas de dueño y de destino: el code
+# owner de un repo de la organización sigue siendo dueno=, aunque el dueño del origin sea la organización.
 identificar_repo() {
   local url
   TIENE_ORIGIN=0
+  DE_ORG=0
   url=$(git_destino remote get-url origin 2>/dev/null) && TIENE_ORIGIN=1
   if [ "$TIENE_ORIGIN" -eq 1 ] && origen_github "$url"; then
     DUENO=$DUENO_ORIGIN
     REPO=$REPO_ORIGIN
     ORIGIN_GITHUB=1
+    [ "${DUENO,,}" != "${ORG,,}" ] || DE_ORG=1
   else
     ORIGIN_GITHUB=0
     nombre_seguro "${DESTINO##*/}"
@@ -383,9 +383,11 @@ identificar_repo() {
       NOTAS+=("sin origin: el repo sale del nombre de la carpeta ($REPO) y el dueño de .claude/pipeline.conf ($DUENO).")
     fi
   fi
+  [ "$DE_ORG" -eq 0 ] || return 0
   if [ "${DUENO,,}" != "${DUENO_CONF,,}" ]; then
-    NOTAS+=("el dueño del repo ($DUENO) no es el de .claude/pipeline.conf ($DUENO_CONF): antes del commit del paso 1, cambia dueno= en .claude/pipeline.conf y @$DUENO_CONF en .github/CODEOWNERS.")
+    NOTAS+=("el dueño del repo ($DUENO) no es el de .claude/pipeline.conf ($DUENO_CONF): antes de commitear el framework, cambia dueno= en .claude/pipeline.conf y @$DUENO_CONF en .github/CODEOWNERS.")
   fi
+  NOTAS+=("el destino no es un repo de $ORG: el framework se instala, pero la protección de ramas la dan los rulesets de la organización y aquí no aplican (CLAUDE.md, Repos en la organización).")
 }
 
 # ---------------------------------------------------------------------------
@@ -469,6 +471,9 @@ generar() {
   leer_plantilla railway.ts
   rellenar "$PLANTILLA" repo "$REPO" servicio "$SERVICIO"
   agregar_generado .railway/railway.ts "$RELLENO"
+
+  # La identidad que exige el hook: una sola línea, el bot de pipeline.conf.
+  agregar_generado .claude/identidad-agente.txt "$BOT"$'\n'
 }
 
 # ---------------------------------------------------------------------------
@@ -645,20 +650,17 @@ procesar_archivos() {
 # rama staging
 # ---------------------------------------------------------------------------
 
+# rama_staging: solo informa. El instalador no crea, mueve ni borra ramas: en un repo nuevo, staging
+# nace en el servidor desde main, después del PR T0 (paso 9 de /crear-repo). No hace fetch: solo ve
+# lo que ya hay en el repo local.
 rama_staging() {
   if git_destino show-ref --verify --quiet refs/heads/staging; then
     RAMA=existe
   elif git_destino show-ref --verify --quiet refs/remotes/origin/staging; then
     RAMA=existe
     NOTAS+=("staging existe solo como origin/staging: no se creó la rama local; git switch staging la crea desde origin/staging.")
-  elif ! git_destino rev-parse --verify --quiet 'HEAD^{commit}' > /dev/null 2>&1; then
-    RAMA='sin commits'
   else
-    RAMA=crear
-    if [ "$APLICAR" -eq 1 ] && ! git_destino branch --no-track staging HEAD > /dev/null 2>&1; then
-      printf 'instalar.sh: no pude crear la rama staging\n' >&2
-      FALLOS=$((FALLOS + 1))
-    fi
+    RAMA='no se crea'
   fi
   printf 'rama staging: %s\n' "$RAMA"
 }
@@ -699,47 +701,30 @@ imprimir_conflictos() {
   done
 }
 
-imprimir_paso_git() {
-  local activa=$ACTIVA
-  if [ -z "$activa" ]; then
-    activa=main
-    printf '%s\n' '# HEAD separado: cámbiate a una rama antes de seguir. Estos comandos suponen la rama main.'
-  fi
-  palabra "$activa"
-  activa=$PALABRA
-  printf '%s\n' "# 1. Git: revisa y commitea el framework en la rama activa ($activa), lleva staging a ese commit y empuja las dos ramas."
+# preparar_pasos: lee la plantilla de los pasos manuales, reemplaza sus marcadores y la parte en
+# PASOS_ANTES y PASOS_DESPUES, alrededor de la línea {{conflictos}}: ahí va el bloque de conflictos,
+# si los hay. Los valores que pueden traer cualquier carácter (la ruta de gh y la del destino) se
+# reemplazan al final, para que un {{...}} dentro de ellos no cambie nada más.
+preparar_pasos() {
+  local marca='{{conflictos}}'
+  ruta_config_bot
   citar "$DESTINO"
-  printf 'cd %s\n' "$CITADO"
-  imprimir_conflictos
-  if [ "$TIENE_ORIGIN" -eq 0 ]; then
-    printf '%s\n' "# Sin origin: crea el repo $DUENO/$REPO en GitHub y agrégalo como origin."
-    printf 'git remote add origin https://github.com/%s/%s.git\n' "$DUENO" "$REPO"
-  fi
-  printf '%s\n' 'git status' 'git add -A' 'git commit -m "chore: instalar el framework de agentes"'
-  if [ "$activa" = staging ]; then
-    printf '%s\n' 'git push -u origin staging'
-  else
-    if [ "$RAMA" = 'sin commits' ]; then
-      printf '%s\n' 'git branch staging'
-    fi
-    printf 'git switch staging && git merge --ff-only %s && git switch %s\n' "$activa" "$activa"
-    printf 'git push -u origin %s staging\n' "$activa"
-  fi
-  if [ "$activa" != main ]; then
-    printf '%s\n' "# La rama activa no es main: lleva el framework a main (por PR desde $activa) antes de la protección del paso 2c."
-  fi
+  leer_plantilla pasos-manuales.txt
+  rellenar "$PLANTILLA" dueno "$DUENO" repo "$REPO" org "$ORG" servicio "$SERVICIO" puerto "$PUERTO" bot "$BOT" \
+    gh_config_dir "$RUTA_CONFIG_BOT" destino "$CITADO"
+  case "$RELLENO" in
+    *"$marca"$'\n'*) ;;
+    *) error_fuente "la plantilla instalador/plantillas/pasos-manuales.txt no tiene una línea $marca" ;;
+  esac
+  PASOS_ANTES=${RELLENO%%"$marca"$'\n'*}
+  PASOS_DESPUES=${RELLENO#*"$marca"$'\n'}
 }
 
 imprimir_pasos() {
   printf '%s\n' '== Pasos manuales'
-  printf '%s\n' '# Córrelos tú, en una terminal bash (Git Bash en Windows) y en este orden. Ninguno imprime ni pide un token.'
-  printf '\n'
-  imprimir_paso_git
-  ruta_config_bot
-  leer_plantilla pasos-manuales.txt
-  rellenar "$PLANTILLA" dueno "$DUENO" repo "$REPO" servicio "$SERVICIO" puerto "$PUERTO" bot "$BOT" \
-    repo_completo_min "${DUENO,,}/${REPO,,}" gh_config_dir "$RUTA_CONFIG_BOT"
-  printf '%s' "$RELLENO"
+  printf '%s' "$PASOS_ANTES"
+  imprimir_conflictos
+  printf '%s' "$PASOS_DESPUES"
 }
 
 # ---------------------------------------------------------------------------
@@ -769,11 +754,11 @@ main() {
     detectar_modo
     MODO=$MODO_DETECTADO
   fi
-  ACTIVA=$(git_destino symbolic-ref --short -q HEAD 2> /dev/null) || ACTIVA=''
   generar
+  preparar_pasos
 
   if [ "$APLICAR" -eq 1 ]; then
-    printf '%s\n' 'instalador del framework: aplicando (solo escribe archivos que no existen y la rama local staging)'
+    printf '%s\n' 'instalador del framework: aplicando (solo escribe archivos que no existen; no crea ramas)'
   else
     printf '%s\n' 'instalador del framework: simulación, no escribe nada en el destino (para escribir, repite con --aplicar)'
   fi
