@@ -53,6 +53,51 @@ Plan aprobado: A1 (hook, PR #19, en `staging`), A2 (este PR) y B (instalador). L
   La nota de gitleaks explica el binario con el SHA fijo y cómo actualizarlo.
 - **C8. Suite.** `bash scripts/test-hooks.sh` da 0 fallos con gawk y con mawk, y los casos anteriores siguen pasando. Con los archivos de `origin/staging`, la suite nueva falla en los chequeos de C1 a C7 (mutación).
 
+## Ajustes después de la verificación y la revisión previas al auditor
+
+Un workflow de 6 agentes contrastó A2 con las fuentes primarias (API de GitHub, gh 2.92.0, la release de gitleaks) y lo revisó por dimensiones. Lo que cambió:
+- **C1:**
+  - un `pipeline.conf` sin `bot` también da NO SE PUDO VERIFICAR;
+  - la salida dice la causa (límite de tiempo, gh no instalado o la primera línea del error);
+  - la ALERTA trae la instrucción en su primera línea, lista 50 repos como máximo y avisa si una cuenta llega al tope de 1000;
+  - no hay archivos temporales;
+  - el `timeout` de SessionStart es de 50 s o más.
+- **C2:** la regla es solo para la sesión principal. Si la verificación a mano también falla, se avisa en la primera línea y en el reporte final, y no se corre `/crear-repo` hasta tener `OK`. La línea `ESPERANDO OK` de la ALERTA va literal y con opciones.
+- **C3:** `/crear-repo` tiene un paso 0:
+  - solo en sesión interactiva;
+  - desde el repo del framework;
+  - con la fuente limpia;
+  - con el instalador nuevo, que se reconoce porque la simulación lista `crear .claude/identidad-agente.txt`. Hasta B, eso hace que `/crear-repo` corte solo.
+
+  Además:
+  - suma verificaciones de rulesets y paradas HUMAN;
+  - el ADR, el modo y las variables van en el PR T0;
+  - Railway pasa a después de crear `staging`;
+  - `<archivo>` va en el scratchpad, nunca en `<ruta>` ni con `mktemp`.
+- **C4:**
+  - `--ignore-gitleaks-allow`;
+  - `--log-opts="--all --full-history -m"`, porque sin `-m` un secreto que solo está en un merge no se ve (probado);
+  - el job falla si gitleaks escribe `ERR` o escanea 0 commits, porque gitleaks sale con 0 en esos casos (probado);
+  - `.gitleaksignore` y `.gitleaks.toml` pasan a ser rutas de gobierno, con sus líneas en CODEOWNERS.
+- **C6:** CLAUDE.md declara el PR T0 como excepción en todas las compuertas: Repos en la organización, Fase 0, Fase 1, Fase 3, Fase 4 y "Siempre requieren OK". Además:
+  - distingue el repo del framework de los repos de la organización;
+  - aclara que `rules/branches` reemplaza el `protected: true`, pero no la verificación del bypass que hace Leonardo;
+  - los temporales van en el scratchpad o en una ruta ignorada.
+- **C7:** SETUP.md 4c:
+  - registra lo que Leonardo configuró el 2026-09-30, con los ids de los rulesets;
+  - la emergencia se resuelve desde la web y termina con el paso 3;
+  - el audit log reemplaza a `/history`;
+  - el PATCH de Pages lleva los tres campos;
+  - suma una nota sobre las GitHub Apps de los admins de repo;
+  - la validación del repo de prueba corre desde una sesión en el clon e incluye el `GH013` de un push directo.
+- **El manifiesto del instalador** entra en A2 y no en B: suma `crear-repo.md` y `check-public-repos.sh`. La prueba de aceptación C2 del instalador exige que el manifiesto liste todos los comandos y hooks de `.claude/`.
+
 ## Fuera de alcance (B)
 
-El instalador y su manifiesto. B agrega al manifiesto `check-public-repos.sh` y `crear-repo.md`, quita los pasos de protección por repo y genera `identidad-agente.txt`. Hasta que B esté en `main`, `/crear-repo` no se usa.
+El instalador. Lo que B tiene que hacer para que `/crear-repo` funcione de punta a punta en un repo de la organización:
+- generar `.claude/identidad-agente.txt`, que es lo que habilita el paso 0 de `/crear-repo`;
+- no crear `staging` local en un repo nuevo, porque `staging` nace en el servidor desde `main`;
+- en un repo de la organización:
+  - no imprimir la sección 1 de Git ni la 2 de invitación y protección;
+  - no emitir la nota del dueño (el code owner sigue siendo `dueno=`, aunque el dueño del `origin` sea la organización);
+- dejar los pasos de Railway para después de crear `staging`.
