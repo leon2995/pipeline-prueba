@@ -1299,7 +1299,7 @@ chequeo pasa 'CLAUDE.md: el CTO no deja activa la rama de la subtarea en su chec
 for t in 'solo con `/crear-repo <nombre>`, después del sí de la Fase 1' 'Repos públicos:' \
   '`ALERTA`: avísale a Leonardo en la primera línea de tu respuesta' 'detente y espera su instrucción' \
   'un error no equivale a cero repos públicos' 'el aviso de `ALERTA` termina con la línea `ESPERANDO OK`' \
-  '`rules/branches/<rama>` debe traer' 'los `gh repo` que escriben' 'gh api -F body=@archivo'; do
+  'rules/branches/<rama>` debe traer' 'los `gh repo` que escriben' 'gh api -F body=@archivo'; do
   chequeo pasa "CLAUDE.md: $t" tiene_texto "$t" "$cl"
 done
 # Modelos en la tabla de roles (A2, C5).
