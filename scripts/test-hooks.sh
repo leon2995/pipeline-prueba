@@ -956,6 +956,47 @@ for c in 'git push origin feat/staging-fix' 'git push origin staging:feat/x' 'gi
   'git push -u origin fix/staging' 'git push --tags origin'; do
   g permite "$c"
 done
+echo "-- después de la ronda del auditor: rutas de Windows, deploy-key -R, continuación de línea y GraphQL en variables"
+for c in \
+  "\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create $org/x --public" \
+  "C:\\tools\\gh.exe repo create $org/x --public" \
+  "\"C:\\Program Files\\GitHub CLI\\gh.exe\" api -X PATCH repos/$org/x -f visibility=public" \
+  "gh repo deploy-key -R $org/x add k.pub" \
+  "gh repo deploy-key --repo $org/x add k.pub" \
+  "gh repo deploy-key -R $org/x" \
+  "gh repo create $org/app \\
+  --public --team $equipo" \
+  "gh \\
+  repo create $org/app --public" \
+  "Q=\"mutation{updateRepository(input:{repositoryId:\\\"x\\\"}){clientMutationId}}\"; gh api graphql -f query=\"\$Q\"" \
+  "gh api graphql -f query=\"\$Q\"" \
+  "gh api graphql -f query=\"\$(cat m.graphql)\"" \
+  "gh api graphql -f query=\`cat m.graphql\`" \
+  "gh api -X POST repos/$org/x/branches/feat/y/rename -f new_name=staging" \
+  "gh api -X PUT repos/$org/x/branches/feat/y/protection --input p.json" \
+  'gh api -X PATCH http://api.github.com/repos/o/r -f private=false' \
+  'gh api -X PATCH https://api.github.com:443/repos/o/r -f private=false' \
+  'gh api -X PATCH //repos/o/r -f private=false' \
+  'gh api -X PATCH repos//o/r -f private=false' \
+  'gh api -X PUT teams/123/repos/o/r -f permission=admin'; do
+  g bloquea "$c" '(repos)'
+done
+for c in \
+  "\"C:\\Program Files\\GitHub CLI\\gh.exe\" repo create $org/x --private --team $equipo" \
+  "gh repo deploy-key -R $org/x list" \
+  "gh repo deploy-key delete 123 -R $org/x" \
+  "gh repo create $org/app \\
+  --private --team $equipo" \
+  'gh api -X PATCH repos/{owner}/{repo}/pulls/5 \
+  -f title=x' \
+  "gh api graphql -f query='query(\$o:String!){organization(login:\$o){id}}' -f o=x" \
+  "gh api repos/$org/x/branches/feat/y/protection" \
+  'gh api repos/{owner}/{repo}/issues/5/comments -F body=@comentario.md'; do
+  g permite "$c"
+done
+g bloquea 'git.exe push origin HEAD:staging' '(staging)'
+g bloquea '/usr/bin/git push origin HEAD:staging' '(staging)'
+g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body="usa gh api -X PATCH"' 'body=@'
 
 echo "== CODEOWNERS: derivado de .claude/rutas-gobierno.txt (C1)"
 # recortar <texto>: sin \r ni espacios al inicio y al final.
