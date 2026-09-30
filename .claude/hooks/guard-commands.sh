@@ -331,7 +331,10 @@ if [[ ${cmd,,} == *push*staging* ]]; then
       esac
       [ "${remoto:-${repo:-origin}}" = origin ] ||
         bloqueo staging "staging solo se crea en origin: git push origin origin/main:refs/heads/staging."
-      MSYS_NO_PATHCONV=1 git -C "${dir_c:-.}" cat-file -e origin/main:.github/CODEOWNERS 2>/dev/null ||
+      # En Git Bash, sin MSYS_NO_PATHCONV la ruta origin/main:.github/CODEOWNERS se convierte en
+      # origin\main;.github\CODEOWNERS; con ella, git -C no convierte /c/... ni /tmp/... para git.exe.
+      # Por eso se entra al directorio con cd (bash lo resuelve) y git corre sin -C.
+      ( cd "${dir_c:-.}" 2>/dev/null && MSYS_NO_PATHCONV=1 git cat-file -e origin/main:.github/CODEOWNERS 2>/dev/null ) ||
         bloqueo staging "origin/main de ${dir_c:-este repo} no tiene .github/CODEOWNERS (¿falta el merge del framework a main o un git fetch?); staging se crea después de ese merge."
     done
   done <<< "$(printf '%s\n' "$cmd" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g' | tr ';&|' '\n\n\n')"
