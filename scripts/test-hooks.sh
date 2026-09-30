@@ -1084,9 +1084,28 @@ for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 
   '--base main' 'git -C <ruta> push origin origin/main:refs/heads/staging' 'ESPERANDO OK' 'HUMAN' \
   'Solo en una sesión interactiva' 'test -f instalador/instalar.sh' 'crear .claude/identidad-agente.txt' \
   'rama staging: crear' '<scratchpad>' 'nunca con `mktemp`' 'docs/adr/0001-' '.pipeline/modo' \
-  'no corras las secciones 1 y 2'; do
+  'no corras las secciones 1 y 2' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
+  "-d '<descripción>'" 'un vencimiento del timeout no es un fallo'; do
   chequeo pasa "crear-repo.md: $t" tiene "$t"
 done
+# El paso 0 de /crear-repo reconoce el instalador nuevo (B) por su salida. Con el instalador de este
+# repo, sobre una simulación con origin de la organización y un commit, tiene que cortar. B invierte
+# este chequeo. Solo en el repo del framework, que tiene instalador/.
+if [ -f "$repo/instalador/instalar.sh" ]; then
+  sim="$tmp/sim-app"
+  git init -q "$sim" 2>/dev/null
+  git -C "$sim" remote add origin "https://github.com/$org/app.git"
+  git -C "$sim" -c user.name=prueba -c user.email=prueba@example.com commit -q --allow-empty -m sim
+  salida_sim=$(bash "$repo/instalador/instalar.sh" "$sim" 2>&1)
+  paso0_pasa() {
+    printf '%s\n' "$salida_sim" | grep -qx 'crear .claude/identidad-agente.txt' &&
+      ! printf '%s\n' "$salida_sim" | grep -qx 'rama staging: crear' &&
+      ! printf '%s\n' "$salida_sim" | grep -q '^nota:'
+  }
+  chequeo falla 'el paso 0 de /crear-repo corta con el instalador actual (v1, antes de B)' paso0_pasa
+else
+  echo "omitido: no hay instalador/ (repo instalado), paso 0 de /crear-repo"
+fi
 # Los comandos de los bloques de código pasan el hook, con los marcadores reemplazados.
 mkdir -p "$tmp/scratch"
 cp "$tmp/con-codeowners/.github/CODEOWNERS" "$tmp/cuerpo.md" 2>/dev/null
@@ -1351,6 +1370,8 @@ for t in 'los subagentes ignoran esta regla' 'no corras `/crear-repo` hasta que 
 done
 chequeo falla 'CLAUDE.md ya no dice que rules/branches reemplaza el GET de Leonardo' tiene_texto 'reemplaza el GET de Leonardo' "$cl"
 chequeo falla 'CLAUDE.md ya no dice "En este repo es colaboradora"' tiene_texto 'En este repo es colaboradora' "$cl"
+chequeo pasa 'CLAUDE.md: el PR T0 también es excepción en Cambios en rutas de gobierno y en el proceso ligero' \
+  tiene_texto 'salvo el PR T0 (ver Repos en la organización)' "$cl"
 cuenta_t0() { [ "$(tr -d '\r' < "$cl" | grep -c 'PR T0')" -ge 4 ]; }
 chequeo pasa 'CLAUDE.md cita el PR T0 en Repos en la organización, Fase 0, Fase 3 y Fase 4' cuenta_t0
 # SETUP.md, organización (A2, C7). Solo en este repo: el instalador no copia SETUP.md.
