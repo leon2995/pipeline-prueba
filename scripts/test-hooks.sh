@@ -1091,25 +1091,34 @@ for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 
   '--base main' 'git -C <ruta> push origin origin/main:refs/heads/staging' 'ESPERANDO OK' 'HUMAN' \
   'Solo en una sesión interactiva' 'test -f instalador/instalar.sh' 'crear .claude/identidad-agente.txt' \
   'rama staging: crear' '<scratchpad>' 'nunca con `mktemp`' 'docs/adr/0001-' '.pipeline/modo' \
-  'no corras las secciones 1 y 2' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
-  "-d '<descripción>'" 'un vencimiento del timeout no es un fallo'; do
+  'la sección Agente de los pasos manuales' 'git -C <scratchpad>/sim-<nombre> remote add origin https://github.com/<org>/<nombre>.git' \
+  "-d '<descripción>'" 'un vencimiento del timeout no es un fallo' 'la sección Railway de los pasos manuales' \
+  'sin la línea con la ruta de la configuración de gh del bot' 'la sección Railway que imprimió el instalador en el paso 5'; do
   chequeo pasa "crear-repo.md: $t" tiene "$t"
 done
+chequeo falla 'crear-repo.md ya no remite a las secciones 1 y 2 del instalador' tiene 'secciones 1 y 2'
 # El paso 0 de /crear-repo reconoce el instalador nuevo (B) por su salida. Con el instalador de este
-# repo, sobre una simulación con origin de la organización y un commit, tiene que cortar. B invierte
-# este chequeo. Solo en el repo del framework, que tiene instalador/.
+# repo, sobre una simulación con origin de la organización y un commit, tiene que pasar (antes de B
+# cortaba: el v1 no generaba la identidad, creaba staging local y emitía la nota del dueño). Solo en el
+# repo del framework, que tiene instalador/.
 if [ -f "$repo/instalador/instalar.sh" ]; then
   sim="$tmp/sim-app"
   git init -q "$sim" 2>/dev/null
   git -C "$sim" remote add origin "https://github.com/$org/app.git"
   git -C "$sim" -c user.name=prueba -c user.email=prueba@example.com commit -q --allow-empty -m sim
-  salida_sim=$(bash "$repo/instalador/instalar.sh" "$sim" 2>&1)
+  # paso0_pasa <salida>: las tres condiciones del paso 0 de crear-repo.md.
   paso0_pasa() {
-    printf '%s\n' "$salida_sim" | grep -qx 'crear .claude/identidad-agente.txt' &&
-      ! printf '%s\n' "$salida_sim" | grep -qx 'rama staging: crear' &&
-      ! printf '%s\n' "$salida_sim" | grep -q '^nota:'
+    printf '%s\n' "$1" | grep -qx 'crear .claude/identidad-agente.txt' &&
+      ! printf '%s\n' "$1" | grep -qx 'rama staging: crear' &&
+      ! printf '%s\n' "$1" | grep -q '^nota:'
   }
-  chequeo falla 'el paso 0 de /crear-repo corta con el instalador actual (v1, antes de B)' paso0_pasa
+  chequeo pasa 'el paso 0 de /crear-repo pasa con el instalador actual (B)' paso0_pasa "$(bash "$repo/instalador/instalar.sh" "$sim" 2>&1)"
+  # Control negativo: fuera de la organización el instalador emite una nota y el paso 0 corta.
+  sim_fuera="$tmp/sim-fuera"
+  git init -q "$sim_fuera" 2>/dev/null
+  git -C "$sim_fuera" remote add origin "https://github.com/otra-$org/app.git"
+  git -C "$sim_fuera" -c user.name=prueba -c user.email=prueba@example.com commit -q --allow-empty -m sim
+  chequeo falla 'el paso 0 de /crear-repo corta con un repo fuera de la organización' paso0_pasa "$(bash "$repo/instalador/instalar.sh" "$sim_fuera" 2>&1)"
 else
   echo "omitido: no hay instalador/ (repo instalado), paso 0 de /crear-repo"
 fi

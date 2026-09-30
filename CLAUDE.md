@@ -52,7 +52,7 @@ Los repos de los proyectos viven en la organización `org` de `.claude/pipeline.
 - **Quién los crea:** el agente, nunca Leonardo, y solo con `/crear-repo <nombre>`, después del sí de la Fase 1.
   - Lo corre desde el repo del framework (el que tiene `instalador/`) y en una sesión interactiva.
   - Desde un repo instalado, pídele a Leonardo que abra la sesión en el repo del framework.
-  - `/crear-repo` corta antes de crear nada si el instalador todavía no genera `.claude/identidad-agente.txt` (PR B).
+  - `/crear-repo` corta antes de crear nada si el instalador no genera `.claude/identidad-agente.txt`, o si crea `staging` local o emite notas en un repo de la organización (paso 0).
 - **Qué bloquea el hook** (`guard-commands.sh`):
   - crear un repo sin `--private`, sin el equipo o fuera de la organización;
   - cambiar la visibilidad;
