@@ -37,7 +37,7 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    - no tener la línea `rama staging: crear`;
    - no tener ninguna línea que empiece con `nota:`.
 
-   Si no las cumple, es el instalador v1, anterior a B. En ese caso, HUMAN, sin crear el repo: el v1 no genera la identidad del agente, crea `staging` local en el commit del README y avisa que cambies el dueño en `CODEOWNERS`. La suite comprueba que este paso corta con el instalador actual.
+   Si no las cumple, el instalador no es el de este flujo (por ejemplo, el v1, anterior a B, que no generaba la identidad del agente, creaba `staging` local en el commit del README y avisaba que cambiaras el dueño en `CODEOWNERS`). En ese caso es HUMAN, sin crear el repo. La suite comprueba que el instalador actual cumple las tres condiciones.
 
 1. **Crear el repo.** Si no hay descripción, quita `-d '<descripción>'`. Si falla (por ejemplo, porque el nombre ya existe), HUMAN: no uses un repo que ya existía.
 
@@ -97,8 +97,7 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    - **Qué va en `<archivo>`:** escribe con Write el mensaje del commit y el cuerpo del PR, cada uno en su archivo dentro de `<scratchpad>`. El cuerpo lleva:
      - el SHA de la fuente;
      - la lista de archivos que creó el instalador;
-     - la sección 4 de sus pasos manuales (agente);
-     - la frase "no corras las secciones 1 y 2: el git lo hace el agente y la protección la dan los rulesets".
+     - la sección Agente de los pasos manuales que imprimió el instalador (`settings.local.json`).
    - **Los checks:** `gh pr checks` puede responder "no checks reported" justo después de crear el PR; espera un poco y repítelo. Si un check falla, HUMAN.
    - **El estado del PR:** con los checks en verde, el último comando debe decir `blocked`, porque el PR espera la aprobación de Leonardo. `main` todavía no tiene `CODEOWNERS`, así que GitHub no la pide como code owner: la exige el ruleset. Por eso se lo agrega como revisor.
 
@@ -124,7 +123,7 @@ Escribe cada comando literal, uno por llamada, sin variables, `~` ni `$(...)`. E
    - **Por qué recién ahora:** antes del merge, el hook bloquea el push, porque `origin/main` todavía no tiene `CODEOWNERS`.
    - **Lo esperado:** los dos SHA deben ser iguales.
    - **Si el push falla:** no lo reintentes de otra forma. Es HUMAN, y Leonardo tiene dos salidas: crear `staging` desde la web (Branches, New branch, desde `main`), o desactivar un momento el ruleset `staging` y volver a activarlo (`SETUP.md` 4c.b).
-   - **Railway:** con `staging` creada, Leonardo corre los pasos de Railway que imprimió el instalador. El `package.json` del SDK de Railway entra después por PR, desde la sesión nueva.
+   - **Railway:** con `staging` creada, Leonardo corre la sección Railway de los pasos manuales del instalador. El `package.json` del SDK de Railway entra después por PR, desde la sesión nueva.
 
    ```bash
    git -C <ruta> fetch origin
