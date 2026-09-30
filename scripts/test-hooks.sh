@@ -223,6 +223,8 @@ case "$n" in
   134) rutas=(src/scripts/jev.py) ;;
   135) rutas=(.claude-old/x) ;;
   136) rutas=(docs/.github/x) ;;
+  137) rutas=(.gitleaksignore) ;;
+  138) rutas=(.gitleaks.toml) ;;
   *) exit 1 ;;
 esac
 [ -z "$total" ] && total=${#rutas[@]}
@@ -268,6 +270,8 @@ g permite 'gh pr merge 133 --squash'
 g permite 'gh pr merge 134 --squash'
 g permite 'gh pr merge 135 --squash'
 g permite 'gh pr merge 136 --squash'
+g bloquea 'gh pr merge 137 --squash' 'ruta de gobierno .gitleaksignore'
+g bloquea 'gh pr merge 138 --squash' 'ruta de gobierno .gitleaks.toml'
 g bloquea 'gh pr merge 115 --squash' 'base staging'
 g bloquea 'gh pr merge 116 --squash' 'no pude consultar el PR'
 g bloquea 'gh pr merge 117 --squash' 'no pude consultar los renombres'
@@ -1001,22 +1005,27 @@ g bloquea '/usr/bin/git push origin HEAD:staging' '(staging)'
 g bloquea 'gh api repos/{owner}/{repo}/issues/5/comments -f body="usa gh api -X PATCH"' 'body=@'
 
 echo "== SessionStart: repos públicos en $org y en $bot (A2, C1)"
-# gh falso para check-public-repos.sh: responde gh repo list <cuenta> según FAKE_PUB_ORG y FAKE_PUB_BOT
-# (vacio, falla, lento o una lista de repos separada por comas).
+# gh falso para check-public-repos.sh. Solo responde la consulta exacta del hook (un cambio de flags
+# rompe la suite); la respuesta sale de FAKE_PUB_ORG y FAKE_PUB_BOT: vacio, falla, lento, noinstalado
+# (127), mil (1000 repos), crlf:<lista> o una lista de repos separada por comas.
 mkdir -p "$tmp/gh-publicos"
 cat > "$tmp/gh-publicos/gh" <<'GH'
 #!/usr/bin/env bash
-[ "${1:-} ${2:-}" = "repo list" ] || exit 1
-case "${3:-}" in
+[ "$*" = "repo list ${3:-} --visibility public --limit 1000 --json nameWithOwner --jq .[].nameWithOwner" ] ||
+  { echo "consulta inesperada: $*" >&2; exit 1; }
+case "$3" in
   "$FAKE_ORG") r=${FAKE_PUB_ORG:-vacio} ;;
   "$FAKE_BOT") r=${FAKE_PUB_BOT:-vacio} ;;
   *) exit 1 ;;
 esac
 case "$r" in
   vacio) exit 0 ;;
-  falla) echo "HTTP 502" >&2; exit 1 ;;
+  falla) echo "HTTP 502: Bad Gateway" >&2; exit 1 ;;
   lento) sleep 5; exit 0 ;;
-  *) printf '%s\n' "${r//,/$'\n'}" ;;
+  noinstalado) exit 127 ;;
+  mil) for i in $(seq 1 1000); do printf '%s/r%s\n' "$3" "$i"; done ;;
+  crlf:*) r=${r#crlf:}; printf '%s\r\n' ${r//,/ } ;;
+  *) printf '%s\n' ${r//,/ } ;;
 esac
 GH
 chmod +x "$tmp/gh-publicos/gh"
@@ -1039,20 +1048,31 @@ sesion() {
 }
 sesion 'Repos públicos: OK' 'ALERTA' 'ninguna cuenta tiene repos públicos'
 sesion "- $org/web" 'Repos públicos: OK' "ALERTA con los repos públicos de $org" FAKE_PUB_ORG="$org/api,$org/web"
-sesion 'Repos públicos: ALERTA' 'Repos públicos: OK' "ALERTA en $org" FAKE_PUB_ORG="$org/api"
+sesion 'Repos públicos: ALERTA. Avísale a Leonardo' 'Repos públicos: OK' "ALERTA en $org, con la instrucción en la misma línea" FAKE_PUB_ORG="$org/api"
 sesion "- $bot/copia" 'Repos públicos: OK' "ALERTA con los repos públicos de $bot" FAKE_PUB_BOT="$bot/copia"
 sesion 'NO SE PUDO VERIFICAR' 'Repos públicos: OK' "gh falla en $org" FAKE_PUB_ORG=falla
-sesion "$org" 'Repos públicos: OK' "gh falla en $org: la nombra" FAKE_PUB_ORG=falla
+sesion "$org: gh: HTTP 502" 'Repos públicos: OK' "gh falla en $org: la nombra con la causa" FAKE_PUB_ORG=falla
 sesion 'NO SE PUDO VERIFICAR' 'Repos públicos: OK' "gh falla en $bot" FAKE_PUB_BOT=falla
-sesion "$bot" 'Repos públicos: OK' "gh falla en $bot: la nombra" FAKE_PUB_BOT=falla
+sesion "$bot: gh: HTTP 502" 'Repos públicos: OK' "gh falla en $bot: la nombra con la causa" FAKE_PUB_BOT=falla
 sesion 'Repos públicos: ALERTA' 'Repos públicos: OK' "ALERTA en $org aunque $bot falle" FAKE_PUB_ORG="$org/api" FAKE_PUB_BOT=falla
-sesion 'no se pudo verificar' - "ALERTA en $org y aviso de que $bot falló" FAKE_PUB_ORG="$org/api" FAKE_PUB_BOT=falla
+sesion "Además, no se pudo verificar: $bot" - "ALERTA en $org y aviso de que $bot falló" FAKE_PUB_ORG="$org/api" FAKE_PUB_BOT=falla
+sesion "Además, no se pudo verificar: $org" - "ALERTA en $bot y aviso de que $org falló" FAKE_PUB_BOT="$bot/copia" FAKE_PUB_ORG=falla
 sesion 'NO SE PUDO VERIFICAR' 'Repos públicos: OK' 'gh tarda más que el límite' FAKE_PUB_ORG=lento REPOS_PUBLICOS_TIMEOUT=1
-mkdir -p "$tmp/reglas/sesion-sin-org/.claude/hooks"
+sesion 'límite de 1 s' 'Repos públicos: OK' 'gh tarda más que el límite: lo dice' FAKE_PUB_ORG=lento REPOS_PUBLICOS_TIMEOUT=1
+sesion 'no está instalado' 'Repos públicos: OK' 'gh no instalado' FAKE_PUB_ORG=noinstalado
+sesion 'Repos públicos: OK' 'ALERTA' 'REPOS_PUBLICOS_TIMEOUT inválido usa el valor por defecto' REPOS_PUBLICOS_TIMEOUT=abc
+sesion "- $org/web" $'\r' 'salida de gh con CRLF: los repos salen sin \r' FAKE_PUB_ORG="crlf:$org/api,$org/web"
+sesion 'y 950 más' 'Repos públicos: OK' 'lista larga: muestra 50 y cuenta el resto' FAKE_PUB_ORG=mil
+sesion 'posiblemente incompleta' 'Repos públicos: OK' 'una cuenta con 1000 repos públicos: avisa que la lista puede estar incompleta' FAKE_PUB_ORG=mil
+mkdir -p "$tmp/reglas/sesion-sin-org/.claude/hooks" "$tmp/reglas/sesion-sin-bot/.claude/hooks"
 cp "$hooks/check-public-repos.sh" "$tmp/reglas/sesion-sin-org/.claude/hooks/" 2>/dev/null
+cp "$hooks/check-public-repos.sh" "$tmp/reglas/sesion-sin-bot/.claude/hooks/" 2>/dev/null
 printf 'dueno=%s\nbot=%s\nequipo=%s\n' "$dueno" "$bot" "$equipo" > "$tmp/reglas/sesion-sin-org/.claude/pipeline.conf"
+printf 'dueno=%s\norg=%s\nequipo=%s\n' "$dueno" "$org" "$equipo" > "$tmp/reglas/sesion-sin-bot/.claude/pipeline.conf"
 hooks_alt="$tmp/reglas/sesion-sin-org/.claude/hooks"
 sesion 'NO SE PUDO VERIFICAR' 'Repos públicos: OK' 'pipeline.conf sin org'
+hooks_alt="$tmp/reglas/sesion-sin-bot/.claude/hooks"
+sesion 'NO SE PUDO VERIFICAR' 'Repos públicos: OK' 'pipeline.conf sin bot'
 hooks_alt=""
 
 echo "== /crear-repo (A2, C3)"
@@ -1061,15 +1081,21 @@ chequeo pasa 'existe .claude/commands/crear-repo.md' test -f "$cr"
 tiene() { tr -d '\r' < "$cr" 2>/dev/null | grep -qF -- "$1"; }
 for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 'rules/branches/main' \
   'rules/branches/staging' 'git clone https://github.com/<org>/<nombre>.git <ruta>' 'feat/T0-framework' \
-  '--base main' 'git -C <ruta> push origin origin/main:refs/heads/staging' 'ESPERANDO OK' 'HUMAN'; do
+  '--base main' 'git -C <ruta> push origin origin/main:refs/heads/staging' 'ESPERANDO OK' 'HUMAN' \
+  'Solo en una sesión interactiva' 'test -f instalador/instalar.sh' 'crear .claude/identidad-agente.txt' \
+  'rama staging: crear' '<scratchpad>' 'nunca con `mktemp`' 'docs/adr/0001-' '.pipeline/modo' \
+  'no corras las secciones 1 y 2'; do
   chequeo pasa "crear-repo.md: $t" tiene "$t"
 done
 # Los comandos de los bloques de código pasan el hook, con los marcadores reemplazados.
+mkdir -p "$tmp/scratch"
 cp "$tmp/con-codeowners/.github/CODEOWNERS" "$tmp/cuerpo.md" 2>/dev/null
 comandos_cr=$(tr -d '\r' < "$cr" 2>/dev/null |
   awk '/^ *```/ { dentro = !dentro; next } dentro && /^ *(gh|git|bash) / { sub(/^ +/, ""); print }' |
   sed -e "s#<org>#$org#g; s#<equipo>#$equipo#g; s#<nombre>#app#g; s#<ruta>#$tmp/con-codeowners#g" \
-      -e "s#<n>#5#g; s#<archivo>#$tmp/cuerpo.md#g; s#<descripción>#API de prueba#g")
+      -e "s#<n>#5#g; s#<archivo>#$tmp/cuerpo.md#g; s#<descripción>#API de prueba#g" \
+      -e "s#<scratchpad>#$tmp/scratch#g; s#<titulo>#prueba#g")
+chequeo falla 'los comandos de crear-repo.md no dejan marcadores sin reemplazar' grep -q '<[a-zA-Z][^ >]*>' <<< "$comandos_cr"
 chequeo pasa 'crear-repo.md trae comandos en bloques de código' test -n "$comandos_cr"
 while IFS= read -r c; do
   [ -n "$c" ] && g permite "$c"
@@ -1230,6 +1256,13 @@ chequeo pasa 'secrets baja de la release oficial de gitleaks' en_bloque job_secr
 chequeo pasa 'secrets escanea todo el historial (fetch-depth: 0 y gitleaks git)' en_bloque job_secrets 'fetch-depth: 0'
 chequeo pasa 'secrets corre gitleaks git' en_bloque job_secrets '\./gitleaks git '
 chequeo pasa 'secrets declara permissions: contents: read' en_bloque job_secrets '^      contents: read$'
+chequeo pasa 'secrets no acepta comentarios gitleaks:allow' en_bloque job_secrets ' --ignore-gitleaks-allow'
+chequeo pasa 'secrets escanea también el contenido de los merges (-m)' en_bloque job_secrets ' --log-opts="--all --full-history -m"'
+chequeo pasa 'secrets falla si gitleaks escribe ERR o no escanea commits' en_bloque job_secrets "' ERR \|INF 0 commits scanned'"
+# .gitleaksignore y .gitleaks.toml apagan hallazgos: son rutas de gobierno (A2).
+for r in .gitleaksignore .gitleaks.toml; do
+  chequeo pasa "rutas-gobierno.txt incluye $r" tiene_linea "$r" "$repo/.claude/rutas-gobierno.txt"
+done
 # Modelos (A2, C5), verificados contra Claude Code 2.1.285.
 chequeo pasa 'settings.json: modelo del CTO claude-opus-5-5' jq -e '.model == "claude-opus-5-5"' "$s"
 chequeo pasa 'settings.json: effortLevel xhigh' jq -e '.effortLevel == "xhigh"' "$s"
@@ -1248,13 +1281,13 @@ chequeo pasa 'test-writer.md: model sonnet' test "$(fm "$ag/test-writer.md" mode
 chequeo pasa 'test-writer.md: effort high' test "$(fm "$ag/test-writer.md" effort)" = high
 chequeo pasa 'auditor.md: model claude-opus-5-5' test "$(fm "$ag/auditor.md" model)" = claude-opus-5-5
 chequeo pasa 'auditor.md: effort high' test "$(fm "$ag/auditor.md" effort)" = high
-chequeo falla 'ningún agente usa Fable' grep -Eqi '^model: *[^ ]*fable' "$ag/engineer.md" "$ag/test-writer.md" "$ag/auditor.md"
+chequeo falla 'ningún agente usa Fable (ni el alias best, que hoy resuelve a Fable)' grep -Eqi '^model: *(best|[^ ]*fable)' "$ag"/*.md
 # SessionStart (A2, C1): check-public-repos.sh, sin matcher y con timeout.
 chequeo pasa 'settings.json registra check-public-repos.sh en SessionStart' \
   jq -e '[.hooks.SessionStart[]?.hooks[]? | select(.type == "command" and (.command | test("check-public-repos\\.sh")))] | length == 1' "$s"
 chequeo pasa 'SessionStart sin matcher (todas las fuentes)' jq -e '[.hooks.SessionStart[]? | select(has("matcher"))] | length == 0' "$s"
-chequeo pasa 'SessionStart con timeout' \
-  jq -e '[.hooks.SessionStart[]?.hooks[]? | select(.command | test("check-public-repos")) | .timeout | numbers] | length == 1' "$s"
+chequeo pasa 'SessionStart con timeout de 50 s o más (dos consultas de 20 s y margen)' \
+  jq -e '[.hooks.SessionStart[]?.hooks[]? | select(.command | test("check-public-repos")) | .timeout | numbers | select(. >= 50)] | length == 1' "$s"
 
 echo "== protocolo: lecciones, proceso ligero y auditores (lecciones, T2)"
 tiene_texto() { tr -d '\r' < "$2" | grep -qF -- "$1"; }
@@ -1309,11 +1342,23 @@ for t in '`claude-sonnet-5-5`), esfuerzo muy alto (`effort: xhigh`), nunca `max`
   chequeo pasa "CLAUDE.md: $t" tiene_texto "$t" "$cl"
 done
 chequeo falla 'CLAUDE.md ya no fija "ultracode": true' tiene_texto '"ultracode": true' "$cl"
+# Después de la verificación y revisión previa al auditor (A2): alcance de la regla de sesión, la
+# verificación manual fallida, el PR T0 en todas las compuertas y el texto para repos instalados.
+for t in 'los subagentes ignoran esta regla' 'no corras `/crear-repo` hasta que la verificación dé `OK`' \
+  'ESPERANDO OK: repos públicos' 'es la única vez que `staging` nace por push' 'reemplaza el `protected: true`' \
+  'En el repo del framework' 'el ADR, el modo y las variables van en el repo nuevo' 'nunca con `mktemp`'; do
+  chequeo pasa "CLAUDE.md: $t" tiene_texto "$t" "$cl"
+done
+chequeo falla 'CLAUDE.md ya no dice que rules/branches reemplaza el GET de Leonardo' tiene_texto 'reemplaza el GET de Leonardo' "$cl"
+chequeo falla 'CLAUDE.md ya no dice "En este repo es colaboradora"' tiene_texto 'En este repo es colaboradora' "$cl"
+cuenta_t0() { [ "$(tr -d '\r' < "$cl" | grep -c 'PR T0')" -ge 4 ]; }
+chequeo pasa 'CLAUDE.md cita el PR T0 en Repos en la organización, Fase 0, Fase 3 y Fase 4' cuenta_t0
 # SETUP.md, organización (A2, C7). Solo en este repo: el instalador no copia SETUP.md.
 if [ -f "$repo/SETUP.md" ]; then
   for t in "gh api -X POST orgs/$org/rulesets" '"do_not_enforce_on_create": true' '"bypass_actors": []' \
     'members_can_create_pages' 'Stop usage' 'All repositories' "$org/prueba-rulesets" \
-    "fine-grained con dueño \`$org\`" 'sha256sum -c'; do
+    "fine-grained con dueño \`$org\`" 'sha256sum -c' 'GH013' '24221749' '24221758' '`.gitleaks.toml`' \
+    'audit log'; do
     chequeo pasa "SETUP.md: $t" tiene_texto "$t" "$repo/SETUP.md"
   done
   chequeo falla 'SETUP.md ya no sugiere quitar el job secrets' tiene_texto 'quita el job `secrets`' "$repo/SETUP.md"
