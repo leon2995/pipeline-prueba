@@ -10,6 +10,7 @@ Riesgo: **medio**. Es una corrección de A1 (#19) en `guard-commands.sh`, que es
 
 ## Criterios
 
-- **C1.** El chequeo de `CODEOWNERS` entra al directorio con `cd`, que resuelve bash, y corre `git cat-file` sin `-C`, con `MSYS_NO_PATHCONV=1`. Si el directorio no existe o no tiene `CODEOWNERS` en `origin/main`, sigue bloqueando.
-- **C2.** En Windows, con rutas `/c/...`, `C:/...` y `/tmp/...`, el push permitido pasa. El que va sin `CODEOWNERS`, con un directorio inexistente o con `HEAD:staging` se bloquea.
+- **C1.** El chequeo de `CODEOWNERS` entra al directorio con `CDPATH='' cd --`, que resuelve bash, y corre `git cat-file` sin `-C`, con `MSYS_NO_PATHCONV=1`. Si el directorio no existe, solo aparece por `CDPATH` o no tiene `CODEOWNERS` en `origin/main`, sigue bloqueando. C4 lee el remoto de `git -C <dir> push` con el mismo patrón.
+  - *Ajustado después de la ronda del auditor:* `CDPATH` y `--`, y el mismo patrón en C4.
+- **C2.** En Windows, con rutas `/c/...`, `C:/...`, `/tmp/...` y con un espacio en la ruta, el push permitido pasa. El que va sin `CODEOWNERS`, con un directorio inexistente o con `HEAD:staging` se bloquea.
 - **C3.** `bash scripts/test-hooks.sh` da 0 fallos en CI (gawk y mawk) y en Windows. Los 3 casos que fallaban en `staging` pasan.

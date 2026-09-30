@@ -333,8 +333,9 @@ if [[ ${cmd,,} == *push*staging* ]]; then
         bloqueo staging "staging solo se crea en origin: git push origin origin/main:refs/heads/staging."
       # En Git Bash, sin MSYS_NO_PATHCONV la ruta origin/main:.github/CODEOWNERS se convierte en
       # origin\main;.github\CODEOWNERS; con ella, git -C no convierte /c/... ni /tmp/... para git.exe.
-      # Por eso se entra al directorio con cd (bash lo resuelve) y git corre sin -C.
-      ( cd "${dir_c:-.}" 2>/dev/null && MSYS_NO_PATHCONV=1 git cat-file -e origin/main:.github/CODEOWNERS 2>/dev/null ) ||
+      # Por eso se entra al directorio con cd (bash lo resuelve) y git corre sin -C. CDPATH vacío y --
+      # para que cd no busque el directorio en otro lado ni tome un nombre con - como opción.
+      ( CDPATH='' cd -- "${dir_c:-.}" 2>/dev/null && MSYS_NO_PATHCONV=1 git cat-file -e origin/main:.github/CODEOWNERS 2>/dev/null ) ||
         bloqueo staging "origin/main de ${dir_c:-este repo} no tiene .github/CODEOWNERS (¿falta el merge del framework a main o un git fetch?); staging se crea después de ese merge."
     done
   done <<< "$(printf '%s\n' "$cmd" | sed -E 's/[0-9]*[<>]&[0-9]*-?/ /g; s/&>>?/ > /g; s/>\|/>/g' | tr ';&|' '\n\n\n')"
@@ -545,7 +546,8 @@ if [ -e "$archivo_identidad" ]; then
         remoto=${remoto:-origin}
         case "$remoto" in
           *://*|*@*) url=$remoto ;;
-          *) url=$(git -C "${dir_c:-.}" remote get-url --push "$remoto" 2>/dev/null) || url="" ;;
+          # Igual que en la regla de staging: cd y git sin -C, así no depende de MSYS_NO_PATHCONV.
+          *) url=$(CDPATH='' cd -- "${dir_c:-.}" 2>/dev/null && git remote get-url --push "$remoto" 2>/dev/null) || url="" ;;
         esac
         url=${url//$'\r'/}
         case "$url" in
