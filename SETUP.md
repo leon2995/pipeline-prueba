@@ -100,6 +100,12 @@ Esperado: `main` con 1, `true`, `true`, `true` y `secrets:15368`, `hooks:15368`;
 - `workflow` hace falta para tocar `.github/workflows/`.
 - Un fine-grained token no sirve: no da acceso como colaborador a un repo personal de otra cuenta.
 - **Decisión de Leonardo (2026-09-28):** el token actual tiene más scopes que el mínimo, entre ellos `admin:org`, `delete_repo` y `user`, y así se deja. La razón: `talos-bot-leon` solo tiene escritura en este repo, no tiene repos propios y no pertenece a ninguna organización (al 2026-09-28: 0 repos propios y 0 organizaciones). Por eso `repo` y `workflow` solo alcanzan este repo, y los scopes de organización o empresa (`admin:org`, `admin:org_hook`, `admin:enterprise`, `audit_log`, `write:discussion` y `write:network_configurations`) no tienen sobre qué actuar. Los demás aplican solo a la propia cuenta del bot: `user`, las llaves (`admin:public_key`, `admin:gpg_key`, `admin:ssh_signing_key`), `gist`, `notifications`, `project`, `copilot`, `codespace`, los paquetes (`write:packages`, `delete:packages`) y, sobre sus repos propios, que hoy no existen, `delete_repo` y `admin:repo_hook`. **Condición:** revisar los scopes si `talos-bot-leon` se agrega a otros repos u organizaciones, o si crea o recibe repos propios (un fork, por ejemplo), y en ese caso volver al mínimo (`repo`, `read:org`, `workflow`).
+- **La condición se cumplió el 2026-09-29.** `talos-bot-leon` entró a la organización `finconnect-com` como miembro, y es miembro del equipo secreto `forja`. Desde A1 va a crear repos allí (sección 4c).
+  - **Qué scopes ya no son inertes:** `repo` alcanza los repos de la organización a los que tenga acceso. `admin:org` y `delete_repo` no le dan nada a un miembro: las políticas de la organización le impiden borrar y transferir repos, y los rulesets le dan 404.
+  - **Por qué el hook es la barrera:** con un token classic nada del lado de GitHub impide crear repos en su cuenta o en otra organización. Solo lo impide el hook.
+  - **Al rotar el token, evalúa un fine-grained con dueño `finconnect-com`.** No llega a otras cuentas ni organizaciones, así que sería una barrera del lado de GitHub, y el owner lo aprueba.
+  - **Límite del fine-grained:** no sirve para este repo, que es personal de `leon2995` (ver arriba). El framework necesitaría otro token para `pipeline-prueba`.
+  - **La decisión de los scopes del classic:** se revisa en la misma rotación.
 
 Inicia sesión de forma interactiva y pega el token cuando lo pida, con la entrada oculta. Nunca uses `echo` con el token (queda en el historial) ni lo pegues en el chat. Antes del login, guarda tu configuración de credenciales de Git para compararla después:
 
@@ -138,7 +144,7 @@ La primera pregunta importa. Si respondes Sí, `gh` le entrega el token de `talo
 
 Con `--insecure-storage` y la respuesta No, el token de `talos-bot-leon` queda en `~/.talos-gh/hosts.yml` y no en el keyring ni en el Credential Manager. Aun así, en `gh` 2.92.0 el login marca a `talos-bot-leon` como la cuenta activa y reescribe la entrada compartida del keyring de Windows. Tu cuenta conserva su propia entrada. Si `gh api user --jq .login` sin `GH_CONFIG_DIR` deja de decir `leon2995`, corre `gh auth switch --hostname github.com --user leon2995`, y si no alcanza, `gh auth login`.
 
-- **Vence: 2026-10-28** (hora local; 2026-10-29 02:05 UTC). **Rotarlo antes del 2026-10-15.** Token classic creado el 2026-09-28; GitHub responde `2026-10-29 02:05:13 UTC` en la cabecera `GitHub-Authentication-Token-Expiration`, que se ve con `GH_CONFIG_DIR="$HOME/.talos-gh" gh api -i user | grep -i '^github-authentication-token-expiration'`. Para rotarlo: crea uno nuevo, repite el login de este paso (respondiendo No a la pregunta de Git) y revoca el viejo.
+- **Vence: 2026-10-28** (hora local; 2026-10-29 02:05 UTC). **Rotarlo antes del 2026-10-15.** Token classic creado el 2026-09-28; GitHub responde `2026-10-29 02:05:13 UTC` en la cabecera `GitHub-Authentication-Token-Expiration`, que se ve con `GH_CONFIG_DIR="$HOME/.talos-gh" gh api -i user | grep -i '^github-authentication-token-expiration'`. Para rotarlo: crea uno nuevo, repite el login de este paso (respondiendo No a la pregunta de Git) y revoca el viejo. Antes de crearlo, evalúa el fine-grained con dueño `finconnect-com` del punto anterior.
 
 **f. Conectar al agente.** Copia `.claude/settings.local.example.json` como `.claude/settings.local.json`. Si ya existe (Claude Code lo crea al guardar permisos), fusiona solo el bloque `env`. Completa `GH_CONFIG_DIR` con la ruta real (`C:/Users/<tu usuario>/.talos-gh`). El email noreply de `talos-bot-leon` (`335185800+talos-bot-leon@users.noreply.github.com`, de Settings → Emails de esa cuenta) ya viene en la plantilla. El archivo no lleva el token. Reinicia la sesión de Claude Code para que tome el `env` nuevo.
 
@@ -179,6 +185,142 @@ Por qué cada una:
 
 Si en el punto 1 GitHub pide una aprobación, o en el punto 2 no la pide, el comportamiento de "code owners con 0 aprobaciones" no es el esperado. La alternativa es subir `staging` a 1 aprobación (y entonces apruebas todo PR a `staging`) o usar un ruleset con la revisión de code owners.
 
+## 4c. Organización `finconnect-com` (repos de los proyectos)
+
+Los repos de los proyectos los crea el agente en `finconnect-com` con `/crear-repo`: privados y con el equipo `forja` (CLAUDE.md, Repos en la organización). En el plan Team no se puede restringir a los miembros a crear solo repos privados (es exclusivo de Enterprise Cloud), así que la barrera principal para crear es el hook `guard-commands.sh`. Lo del lado de GitHub se configura una vez, aquí. Corre los comandos en tu terminal, con tu cuenta `leon2995`, que es owner.
+
+**a. Ya configurado (2026-09-29, hora local).**
+- En Member privileges, los miembros no pueden cambiar la visibilidad de los repos ni borrarlos o transferirlos.
+- El equipo `forja` es secreto y `talos-bot-leon` es miembro. `talos-bot-leon` es miembro de la organización, no owner.
+- Más tarde, ese mismo día:
+  - Los rulesets `main` (id 24221749) y `staging` (id 24221758) están activos y verificados con el paso 3 de b.
+  - Pages está desactivado para miembros.
+  - El presupuesto de Actions tiene Stop usage.
+  - La app de Railway está instalada con All repositories.
+
+**b. Rulesets de organización.** Son dos, `main` y `staging`, sobre todos los repos (`~ALL`) y sin nadie en la lista de bypass. Reemplazan la protección por repo del paso 4b.e en los repos de la organización.
+
+```bash
+# 0. El scope admin:org en tu gh, y lo que ya existe. Si ya hay un ruleset main o staging, usa PUT
+#    orgs/finconnect-com/rulesets/<ID> en lugar de POST. Si hay repos ajenos al pipeline, agrégalos a
+#    repository_name.exclude: sin el CI del framework no reportan secrets ni hooks y no podrían mergear.
+gh auth refresh -h github.com -s admin:org
+gh api orgs/finconnect-com/rulesets --jq '.[] | "\(.id) \(.name) \(.enforcement)"'
+gh repo list finconnect-com --limit 1000 --json name,visibility --jq '.[] | "\(.name) \(.visibility)"'
+
+# 1. main: PR obligatorio, 1 aprobación, code owners, checks secrets y hooks de GitHub Actions
+#    (integration_id 15368), sin push forzado ni borrado.
+gh api -X POST orgs/finconnect-com/rulesets --input - --jq '{id, name, enforcement}' <<'JSON'
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {"include": ["~DEFAULT_BRANCH", "refs/heads/main"], "exclude": []},
+    "repository_name": {"include": ["~ALL"], "exclude": []}
+  },
+  "rules": [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "pull_request", "parameters": {
+      "required_approving_review_count": 1,
+      "require_code_owner_review": true,
+      "dismiss_stale_reviews_on_push": true,
+      "require_last_push_approval": false,
+      "required_review_thread_resolution": false
+    }},
+    {"type": "required_status_checks", "parameters": {
+      "strict_required_status_checks_policy": false,
+      "do_not_enforce_on_create": true,
+      "required_status_checks": [
+        {"context": "secrets", "integration_id": 15368},
+        {"context": "hooks", "integration_id": 15368}
+      ]
+    }}
+  ]
+}
+JSON
+
+# 2. staging: igual, con 0 aprobaciones. Code owners sigue exigiendo tu aprobación en las rutas de gobierno.
+gh api -X POST orgs/finconnect-com/rulesets --input - --jq '{id, name, enforcement}' <<'JSON'
+{
+  "name": "staging",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {"include": ["refs/heads/staging"], "exclude": []},
+    "repository_name": {"include": ["~ALL"], "exclude": []}
+  },
+  "rules": [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "pull_request", "parameters": {
+      "required_approving_review_count": 0,
+      "require_code_owner_review": true,
+      "dismiss_stale_reviews_on_push": true,
+      "require_last_push_approval": false,
+      "required_review_thread_resolution": false
+    }},
+    {"type": "required_status_checks", "parameters": {
+      "strict_required_status_checks_policy": false,
+      "do_not_enforce_on_create": true,
+      "required_status_checks": [
+        {"context": "secrets", "integration_id": 15368},
+        {"context": "hooks", "integration_id": 15368}
+      ]
+    }}
+  ]
+}
+JSON
+
+# 3. Verificación. Esperado: dos rulesets active; en cada uno bypass [] y repos ["~ALL"], main con 1
+#    aprobación y staging con 0, y checks ["secrets:15368","hooks:15368"].
+gh api orgs/finconnect-com/rulesets --jq '.[] | "\(.id) \(.name) \(.target) \(.enforcement)"'
+gh api orgs/finconnect-com/rulesets/<ID> --jq '{name, enforcement, bypass: .bypass_actors, ramas: .conditions.ref_name.include, repos: .conditions.repository_name.include, reglas: [.rules[].type], pr: ([.rules[] | select(.type=="pull_request") | .parameters][0]), checks: [.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[] | "\(.context):\(.integration_id)"]}'
+```
+
+Por qué cada parámetro:
+- `do_not_enforce_on_create: true`: sin esto un repo nuevo no puede nacer, porque el commit del README y la creación de `staging` no tienen checks. La ventana que abre la cierra el hook, que solo deja crear `staging` desde `origin/main` con `CODEOWNERS`.
+- `require_last_push_approval: false`: con `true`, al mergear tú un PR de gobierno a `staging` quedarías como el último en empujar y no podrías aprobar el PR de `staging` a `main`.
+- `integration_id` 15368 (GitHub Actions): un status publicado con el token del bot no cuenta como el check.
+- Sin reglas `creation` ni `update`: con el bypass vacío, nadie podría crear las ramas ni mergear.
+- Sin bypass: tampoco tú te saltas las reglas.
+  - **En una emergencia:** desactiva el ruleset desde la web, en Settings → Rules → Rulesets → el ruleset → Enforcement status: Disabled, y vuelve a activarlo después.
+  - **Por qué desde la web:** la API no documenta si un `PUT` con solo `enforcement` conserva las reglas.
+  - **Después de reactivarlo:** corre de nuevo el paso 3 y compara con lo esperado.
+  - **El registro:** el cambio queda en el audit log de la organización (evento `repository_ruleset.update`).
+- El agente las lee por repo, sin `admin:org`: `gh api repos/finconnect-com/<repo>/rules/branches/<rama>`.
+
+**c. Ajustes de la organización.**
+
+```bash
+# Pages: en Team un sitio de Pages es público aunque el repo sea privado. Esperado: false, false, false.
+gh api -X PATCH orgs/finconnect-com -F members_can_create_pages=false -F members_can_create_public_pages=false -F members_can_fork_private_repositories=false
+gh api orgs/finconnect-com --jq '{members_can_create_pages, members_can_create_public_pages, members_can_fork_private_repositories}'
+# Actions no aprueba PRs. Esperado: default_workflow_permissions read y can_approve_pull_request_reviews false.
+gh api orgs/finconnect-com/actions/permissions/workflow
+# Si no: gh api -X PUT orgs/finconnect-com/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
+```
+
+- **Presupuesto de Actions.** Los repos privados consumen minutos. Team incluye 3.000 al mes, y el excedente se cobra. En Billing & Licensing → Budgets and alerts, crea un presupuesto para Actions con "Stop usage when budget limit is reached".
+- **Railway.** Instala la GitHub App de Railway en `finconnect-com` con acceso a All repositories. Con All repositories solo la puede instalar un owner. Con Only select repositories tendrías que agregar a mano cada repo que cree el agente.
+- **Pendiente de verificar: GitHub Apps de los admins de repo.** El bot es admin de los repos que crea, y una app instalada en uno de ellos tendría acceso al código. El hook no lo ve, porque la instalación se hace desde la web. No se verificó contra GitHub si el plan Team tiene un ajuste que impida a los admins de repo instalar GitHub Apps. Revísalo en Settings → Member privileges y, si existe, desactívalo.
+
+**d. Validación con un repo de prueba.** Hazla una sola vez, con A2 y B ya en `main` y antes del primer proyecto real. El agente corre `/crear-repo prueba-rulesets`, en una sesión interactiva del repo del framework, y crea `finconnect-com/prueba-rulesets`.
+- **Sin Fase 1 ni Railway:** tu pedido explícito reemplaza el sí de la Fase 1, y los pasos de Railway no se corren.
+
+Dos comportamientos de GitHub no están confirmados en la documentación, y se prueban ahí:
+1. **La creación del repo con `--add-readme` y la de `staging` por push** (pasos 1 y 9 de `/crear-repo`), con los rulesets activos: ninguna de las dos debe quedar bloqueada.
+2. **Code owners en `staging` con 0 aprobaciones.** Se prueba desde una sesión nueva de Claude Code abierta en la carpeta del clon, con su `settings.local.json`. Desde la sesión del framework, `gh pr merge` revisaría y mergearía un PR de `pipeline-prueba`. El agente abre dos PRs a `staging`:
+   - uno que toca `CLAUDE.md`, que debe quedar `blocked` y con `leon2995` en `requested_reviewers`;
+   - otro sin rutas de gobierno, que debe poder mergear él con los checks en verde.
+
+Prueba del lado de GitHub, sin el hook: desde tu terminal, en el clon, intenta un push directo a `main` y otro a `staging`, cada uno con un commit nuevo. Los dos deben responder `GH013` (Repository rule violations). Eso prueba que el ruleset los rechaza aunque nadie esté en el bypass.
+
+Al terminar, bórralo tú: `gh repo delete finconnect-com/prueba-rulesets --yes`, y la carpeta del clon. Tu `gh` necesita el scope `delete_repo` (`gh auth refresh -h github.com -s delete_repo`). El agente no puede borrar repos: se lo impiden el hook y la política de la organización.
+
 ## 5. Primera corrida
 
 Abre Claude Code en el repo (o desde la app móvil de Claude) y escribe:
@@ -194,7 +336,12 @@ En cualquier momento: "cambia a paso-a-paso" o "sigue en automatico". El CTO act
 ## Notas
 
 - Los flags exactos de la CLI de Railway cambian entre versiones. Si `railway variables --kv` o `railway environment link <nombre>` no existen en tu versión, corre `railway --help` y ajusta `.claude/commands/verificar-deploy.md`. El hook solo le deja al agente las lecturas de railway (lista en `guard-commands.sh`); si una lectura nueva que necesitas se bloquea, agrégala a esa lista en un PR de gobierno.
-- `gitleaks-action` es gratis para cuentas personales; para organizaciones pide licencia. Si estorba, quita el job `secrets` y agrega el check de gitleaks como pre-commit local.
+- El job `secrets` corre gitleaks (licencia MIT) sobre todo el historial, con el binario oficial de la release y sin `gitleaks-action`, que pide licencia en repos de organización. La versión y el SHA-256 van fijos en `ci.yml`, que los comprueba con `sha256sum -c`.
+  - **Actualizar:** cambia `v=` y el SHA-256 por los de `gitleaks_<versión>_linux_x64.tar.gz` en el `checksums.txt` de la nueva release (`https://github.com/gitleaks/gitleaks/releases`), en un PR de gobierno.
+  - **No renombres el job:** `secrets` es el nombre del check que exigen los rulesets.
+  - **Si marca un falso positivo** en el historial, agrégalo a un `.gitleaksignore` en la raíz.
+  - **Rutas de gobierno:** `.gitleaksignore` y `.gitleaks.toml` apagan hallazgos (el segundo puede cambiar todas las reglas), por eso los dos son rutas de gobierno y un PR que los toque necesita tu aprobación como code owner.
+  - **`gitleaks:allow`:** el job corre con `--ignore-gitleaks-allow`, así que un comentario `gitleaks:allow` no apaga nada.
 - Los tokens (`gh`, `railway`, `codex`) viven en tu máquina, nunca en el repo. `.env` está en `.gitignore` y bloqueado para todos los agentes. El de `talos-bot-leon` vive en `~/.talos-gh/hosts.yml` (paso 4b.c), con lectura y escritura denegadas al agente.
 
 ## 7. Fase 2 (después de 15 o 20 tareas)

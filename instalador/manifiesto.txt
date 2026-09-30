@@ -22,9 +22,11 @@ LESSONS.md
 .claude/agents/engineer.md
 .claude/agents/test-writer.md
 .claude/commands/audit-codex.md
+.claude/commands/crear-repo.md
 .claude/commands/verificar-deploy.md
 .claude/prompts/auditor-codex.md
 .claude/hooks/_lib.sh
+.claude/hooks/check-public-repos.sh
 .claude/hooks/guard-commands.sh
 .claude/hooks/only-acceptance-tests.sh
 .claude/hooks/protect-acceptance-tests.sh

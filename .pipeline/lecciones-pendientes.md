@@ -16,7 +16,8 @@ Formato: `- [fecha] [subtarea] patrón: qué evitar y qué hacer. (PR #n, archiv
 - [2026-09-29] [T3b] Cuando el manifiesto de un instalador excluye archivos del repo fuente, comprobar que las suites copiadas (test-hooks.sh, CI) no lean esos archivos; si los leen, el repo instalado nace con checks obligatorios en rojo. (PR #16, `veredicto-T3b.json`)
 - [2026-09-29] [instalable] Un chequeo que verifica una clave YAML del frontmatter con grep o awk lineal debe acotar el frontmatter y la sangría; si no, la clave mal ubicada (que Claude Code ignora) pasa el chequeo. (PR #17, `veredicto-instalable.json`)
 - [2026-09-29] [A1] Un filtro previo que decide si un analizador corre debe ser igual o más amplio que el analizador y usar la misma normalización; si normaliza distinto (por ejemplo, borrando barras invertidas), el control falla abierto justo en las formas que el analizador dice aceptar. (PR #19, `veredicto-A1.json`)
-- [2026-09-30] [A1b] Portabilidad de hooks en Git Bash: al invocar git.exe con rutas, no mezclar MSYS_NO_PATHCONV con -C; entrar al directorio con cd (CDPATH= cd --) y correr git sin -C, y exigir una corrida de la suite en Windows porque el CI de Linux no reproduce la conversión de rutas de MSYS. (PR de A1b, `veredicto-A1b.json`)
+- [2026-09-29] [A1b] Portabilidad de hooks en Git Bash: al invocar git.exe con rutas, no mezclar MSYS_NO_PATHCONV con -C; entrar al directorio con cd (CDPATH= cd --) y correr git sin -C, y exigir una corrida de la suite en Windows porque el CI de Linux no reproduce la conversión de rutas de MSYS. (PR #20, `veredicto-A1b.json`)
+- [2026-09-29] [A2] Una compuerta que reconoce una versión futura de un componente por su salida (por ejemplo, 'sin notas') debe listarse como requisito en el contrato de la subtarea que construye esa versión, y probarse con la salida real de la versión actual; si no, la compuerta corta para siempre. (PR de A2, `veredicto-A2.json`)
 
 ## Historial
 
