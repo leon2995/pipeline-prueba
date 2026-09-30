@@ -1066,7 +1066,8 @@ for t in 'gh repo create <org>/<nombre> --private --team <equipo> --add-readme' 
 done
 # Los comandos de los bloques de código pasan el hook, con los marcadores reemplazados.
 cp "$tmp/con-codeowners/.github/CODEOWNERS" "$tmp/cuerpo.md" 2>/dev/null
-comandos_cr=$(tr -d '\r' < "$cr" 2>/dev/null | awk '/^```/ { dentro = !dentro; next } dentro && /^(gh|git|bash) / { print }' |
+comandos_cr=$(tr -d '\r' < "$cr" 2>/dev/null |
+  awk '/^ *```/ { dentro = !dentro; next } dentro && /^ *(gh|git|bash) / { sub(/^ +/, ""); print }' |
   sed -e "s#<org>#$org#g; s#<equipo>#$equipo#g; s#<nombre>#app#g; s#<ruta>#$tmp/con-codeowners#g" \
       -e "s#<n>#5#g; s#<archivo>#$tmp/cuerpo.md#g; s#<descripción>#API de prueba#g")
 chequeo pasa 'crear-repo.md trae comandos en bloques de código' test -n "$comandos_cr"
