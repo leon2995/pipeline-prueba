@@ -604,6 +604,8 @@ g bloquea "gh repo rename nuevo -R $org/app --yes" "identidad de $bot"
 g bloquea "gh repo archive $org/app --yes" "identidad de $bot"
 g bloquea "gh repo unarchive $org/app --yes" "identidad de $bot"
 g bloquea 'gh repo sync' "identidad de $bot"
+g bloquea 'git.exe commit -m x' "identidad de $bot"
+g bloquea '/usr/bin/git push -u origin feat/x' "identidad de $bot"
 g permite 'gh repo create --help'
 g permite "gh repo view $org/app --json visibility"
 g permite 'gh api -XGET repos/{owner}/{repo}/pulls/5'
